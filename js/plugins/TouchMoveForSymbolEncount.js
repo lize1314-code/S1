@@ -88,7 +88,7 @@
 
     const OUTER_SIZE = 150;
     const STICK_SIZE = 64;
-    const MOVE_INTERVAL = 85;
+    const MOVE_INTERVAL = 170;
 
     function canUseJoystick() {
         if (!$gamePlayer) return false;
