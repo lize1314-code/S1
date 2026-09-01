@@ -47,7 +47,6 @@
 
     //==================================================
     // TouchMoveForSymbolEncount 原始功能
-    // 完全保留
     //==================================================
 
     Game_Character.prototype.searchLimit = function() {
@@ -70,13 +69,13 @@
 
     let lastMoveTime = 0;
 
-    // 搖桿大小
+    // 搖桿外圈大小
     const OUTER_SIZE = 150;
 
     // 搖桿中心按鈕大小
     const STICK_SIZE = 64;
 
-    // 搖桿死區
+    // 死區
     // 數值越大，越不靈敏
     const DEAD_ZONE = 25;
 
@@ -306,6 +305,37 @@
         );
 
 
+        //==================================================
+        // 原生 Touch 事件
+        // 直接在搖桿本身攔截
+        //==================================================
+
+        [
+            "touchstart",
+            "touchmove",
+            "touchend",
+            "touchcancel"
+        ].forEach(
+            function(type) {
+
+                joystick.addEventListener(
+                    type,
+                    function(event) {
+
+                        event.preventDefault();
+
+                        event.stopImmediatePropagation();
+
+                    },
+                    {
+                        passive: false
+                    }
+                );
+
+            }
+        );
+
+
         updateJoystickPosition();
     }
 
@@ -323,10 +353,8 @@
         const mobile =
             window.innerWidth <= 760;
 
-
         const size =
             mobile ? 132 : 150;
-
 
         const stickSize =
             mobile ? 58 : 64;
@@ -352,7 +380,6 @@
                 ((size - stickSize) / 2) +
                 "px";
 
-
             stick.style.top =
                 ((size - stickSize) / 2) +
                 "px";
@@ -373,30 +400,24 @@
             return;
         }
 
-
         const size =
             joystick.getBoundingClientRect()
                 .width;
-
 
         const stickSize =
             stick.getBoundingClientRect()
                 .width;
 
-
         stick.style.left =
             ((size - stickSize) / 2) +
             "px";
-
 
         stick.style.top =
             ((size - stickSize) / 2) +
             "px";
 
-
         activePointerId =
             null;
-
 
         currentDirection =
             0;
@@ -514,7 +535,6 @@
             rect.left +
             rect.width / 2;
 
-
         const cy =
             rect.top +
             rect.height / 2;
@@ -522,7 +542,6 @@
 
         let dx =
             clientX - cx;
-
 
         let dy =
             clientY - cy;
@@ -542,7 +561,6 @@
         const maxDistance =
             Math.max(
                 1,
-
                 rect.width / 2 -
                 stickRect.width / 2
             );
@@ -562,7 +580,6 @@
                 distance *
                 maxDistance;
 
-
             dy =
                 dy /
                 distance *
@@ -574,7 +591,6 @@
             rect.width / 2 -
             stickRect.width / 2;
 
-
         const baseY =
             rect.height / 2 -
             stickRect.height / 2;
@@ -583,7 +599,6 @@
         stick.style.left =
             (baseX + dx) +
             "px";
-
 
         stick.style.top =
             (baseY + dy) +
@@ -887,10 +902,10 @@
 
 
     //==================================================
-    // 搖桿與原生點擊移動隔離
+    // 搖桿與 RPG Maker 原生 TouchInput 完全隔離
     //
-    // 只有碰到搖桿時才阻止觸控事件。
-    // 地圖其他地方仍然可以正常點擊移動。
+    // 只有碰到搖桿才攔截。
+    // 地圖其他地方完全不攔截。
     //==================================================
 
     function isJoystickTarget(
@@ -905,107 +920,131 @@
     }
 
 
+    function isJoystickTouchEvent(
+        event
+    ) {
+
+        return (
+            event &&
+            isJoystickTarget(
+                event.target
+            )
+        );
+    }
+
+
     //==================================================
-    // Touch Start
+    // 第一層：
+    // Capture 階段攔截搖桿 Touch
     //==================================================
 
-    document.addEventListener(
+    [
         "touchstart",
-        function(event) {
-
-            if (
-                isJoystickTarget(
-                    event.target
-                )
-            ) {
-
-                event.preventDefault();
-
-                event.stopPropagation();
-            }
-
-        },
-        {
-            passive: false
-        }
-    );
-
-
-    //==================================================
-    // Touch Move
-    //==================================================
-
-    document.addEventListener(
         "touchmove",
-        function(event) {
-
-            if (
-                isJoystickTarget(
-                    event.target
-                )
-            ) {
-
-                event.preventDefault();
-
-                event.stopPropagation();
-            }
-
-        },
-        {
-            passive: false
-        }
-    );
-
-
-    //==================================================
-    // Touch End
-    //==================================================
-
-    document.addEventListener(
         "touchend",
-        function(event) {
+        "touchcancel"
+    ].forEach(
+        function(type) {
 
-            if (
-                isJoystickTarget(
-                    event.target
-                )
-            ) {
+            document.addEventListener(
+                type,
+                function(event) {
 
-                event.preventDefault();
+                    if (
+                        isJoystickTouchEvent(
+                            event
+                        )
+                    ) {
 
-                event.stopPropagation();
-            }
+                        event.preventDefault();
 
-        },
-        {
-            passive: false
+                        event.stopImmediatePropagation();
+                    }
+
+                },
+                {
+                    passive: false,
+                    capture: true
+                }
+            );
+
         }
     );
 
 
     //==================================================
-    // Touch Cancel
+    // 第二層：
+    // 直接讓 RPG Maker TouchInput 忽略搖桿
     //==================================================
 
-    document.addEventListener(
-        "touchcancel",
-        function(event) {
+    if (
+        typeof TouchInput !==
+        "undefined"
+    ) {
 
-            if (
-                isJoystickTarget(
-                    event.target
-                )
-            ) {
+        const _TouchInput_onTouchStart =
+            TouchInput._onTouchStart;
 
-                event.preventDefault();
+        const _TouchInput_onTouchMove =
+            TouchInput._onTouchMove;
 
-                event.stopPropagation();
-            }
+        const _TouchInput_onTouchEnd =
+            TouchInput._onTouchEnd;
 
-        },
-        {
-            passive: false
-        }
-    );
+
+        TouchInput._onTouchStart =
+            function(event) {
+
+                if (
+                    isJoystickTouchEvent(
+                        event
+                    )
+                ) {
+                    return;
+                }
+
+                _TouchInput_onTouchStart.call(
+                    this,
+                    event
+                );
+            };
+
+
+        TouchInput._onTouchMove =
+            function(event) {
+
+                if (
+                    isJoystickTouchEvent(
+                        event
+                    )
+                ) {
+                    return;
+                }
+
+                _TouchInput_onTouchMove.call(
+                    this,
+                    event
+                );
+            };
+
+
+        TouchInput._onTouchEnd =
+            function(event) {
+
+                if (
+                    isJoystickTouchEvent(
+                        event
+                    )
+                ) {
+                    return;
+                }
+
+                _TouchInput_onTouchEnd.call(
+                    this,
+                    event
+                );
+            };
+
+    }
 
 })();
