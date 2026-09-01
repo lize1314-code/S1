@@ -1,40 +1,82 @@
 /*:
- * @target MZ
- * @plugindesc TouchMoveForSymbolEncount + Virtual Joystick 整合版
- * @author Shitsudo Kei / Integrated
+ * @target MV MZ
+ * @plugindesc Touch not to avoid the event symbols when moving.
+ * @author Shitsudo Kei
  *
- * @help
- * 將 TouchMoveForSymbolEncount 的功能與虛擬搖桿整合為單一插件。
+ * @help There are no plugin commands in this plugin.
+ * This plugin is compatible with RPG Maker MV and MZ.
  *
- * 功能：
- * 1. 保留原插件：Game_Character.prototype.searchLimit() = 2
- * 2. 左下角顯示虛擬搖桿
- * 3. 支援八方向移動
- * 4. 使用 Game_Player.executeMove()，可正常觸發地圖事件接觸判定
- * 5. 事件、選單、訊息播放時自動隱藏搖桿
- * 6. 不需要另外啟用 VirtualJoystick_MZ.js
+ * -Features
+ * Reduce the pathfinding limit on touch moves to avoid event symbols and increase the encounter rate with symbol encounters.
+ * Caution：Due to the impact of the change, the default touch-move pathfinding ability changes.
  *
- * 建議：
- * - 本插件 ON
- * - TouchMoveForSymbolEncount.js OFF
- * - VirtualJoystick_MZ.js OFF
- * - SmoothTouchMove.js 建議 OFF
+ * I will not be responsible for any problems that may occur. Please understand. 
+ * -License
+ * This plugin is distributed under the MIT license.
+ * Feel free to use it.
+ * http://opensource.org/licenses/mit-license.php
+ */
+/*:ja
+ * @target MV MZ
+ * @plugindesc タッチ移動時イベントシンボルを避けないようにします。
+ * @author 湿度ケイ
+ *
+ * @help このプラグインには、プラグインコマンドはありません。
+ * このプラグインは、RPGツクールMVとMZに対応しています。
+ *
+ * ■概要
+ * タッチ移動時の経路探索上限を減らすことで、イベントシンボルを避けないようにし、シンボルエンカウントとのエンカウント率を上げます。
+ * ※注意：副作用として通常のタッチ移動のスペックを大きく損ないます。
+ *
+ * ■ライセンス表記
+ * このプラグインは MIT ライセンスで配布されます。
+ * ご自由にお使いください。
+ * http://opensource.org/licenses/mit-license.php
  */
 
-(() => {
-    "use strict";
+/*:zh
+ * @target MV MZ
+ * @plugindesc 在触摸移动时不会避开事件符号。
+ * @author Shitsudo Kei
+ *
+ * @help 本插件没有插件命令。
+ * 本插件兼容 RPG Maker MV 和 MZ。
+ *
+ * ■ 概要
+ * 通过减少触摸移动时的路径搜索上限，
+ * 使角色不再自动避开事件符号，
+ * 从而提高与符号遭遇战的遭遇率。
+ *
+ * ※ 注意：作为副作用，会严重降低普通触摸移动的表现。
+ *
+ * ■ 许可证
+ * 本插件基于 MIT 许可证发布。
+ * 你可以自由使用本插件。
+ * http://opensource.org/licenses/mit-license.php
+ */
 
-    //==================================================
-    // TouchMoveForSymbolEncount 原功能
-    //==================================================
+(function() {
 
+    //
+    // overwrite
+    //
     Game_Character.prototype.searchLimit = function() {
         return 2;
     };
 
-    //==================================================
-    // Virtual Joystick
-    //==================================================
+})();
+
+
+/*:
+ * ============================================================================
+ * Virtual Joystick Extension
+ * ============================================================================
+ * 在完全保留原 TouchMoveForSymbolEncount 功能的基礎上追加虛擬搖桿。
+ * ============================================================================
+ */
+
+(function() {
+    "use strict";
 
     const JOYSTICK_ID = "tmse-virtual-joystick";
 
@@ -48,10 +90,6 @@
     const STICK_SIZE = 64;
     const MOVE_INTERVAL = 85;
 
-    //==================================================
-    // 是否可以使用搖桿
-    //==================================================
-
     function canUseJoystick() {
         if (!$gamePlayer) return false;
         if (!$gameMap) return false;
@@ -60,8 +98,10 @@
             return false;
         }
 
-        if (SceneManager._scene &&
-            !(SceneManager._scene instanceof Scene_Map)) {
+        if (
+            SceneManager._scene &&
+            !(SceneManager._scene instanceof Scene_Map)
+        ) {
             return false;
         }
 
@@ -72,12 +112,10 @@
         return true;
     }
 
-    //==================================================
-    // 建立搖桿
-    //==================================================
-
     function createJoystick() {
-        if (joystick || !document.body) return;
+        if (joystick || !document.body) {
+            return;
+        }
 
         joystick = document.createElement("div");
         joystick.id = JOYSTICK_ID;
@@ -151,14 +189,13 @@
         updateJoystickPosition();
     }
 
-    //==================================================
-    // 手機尺寸
-    //==================================================
-
     function updateJoystickPosition() {
-        if (!joystick) return;
+        if (!joystick) {
+            return;
+        }
 
         const mobile = window.innerWidth <= 760;
+
         const size = mobile ? 132 : 150;
         const stickSize = mobile ? 58 : 64;
 
@@ -168,19 +205,19 @@
         if (stick) {
             stick.style.width = stickSize + "px";
             stick.style.height = stickSize + "px";
+
             stick.style.left =
                 ((size - stickSize) / 2) + "px";
+
             stick.style.top =
                 ((size - stickSize) / 2) + "px";
         }
     }
 
-    //==================================================
-    // 重置搖桿
-    //==================================================
-
     function resetStick() {
-        if (!joystick || !stick) return;
+        if (!joystick || !stick) {
+            return;
+        }
 
         const size =
             joystick.getBoundingClientRect().width;
@@ -198,11 +235,8 @@
         currentDirection = 0;
     }
 
-    //==================================================
-    // 方向判定
-    //==================================================
-
     function getDirection(dx, dy) {
+
         const distance =
             Math.sqrt(dx * dx + dy * dy);
 
@@ -213,27 +247,70 @@
         const angle =
             Math.atan2(dy, dx) * 180 / Math.PI;
 
-        if (angle >= -22.5 && angle < 22.5) {
+        if (
+            angle >= -22.5 &&
+            angle < 22.5
+        ) {
             return 6;
         }
 
-        if (angle >= 22.5 && angle < 157.5) {
+        if (
+            angle >= 22.5 &&
+            angle < 67.5
+        ) {
             return 2;
         }
 
-        if (angle >= 157.5 || angle < -157.5) {
+        if (
+            angle >= 67.5 &&
+            angle < 112.5
+        ) {
+            return 2;
+        }
+
+        if (
+            angle >= 112.5 &&
+            angle < 157.5
+        ) {
+            return 2;
+        }
+
+        if (
+            angle >= 157.5 ||
+            angle < -157.5
+        ) {
             return 4;
         }
 
-        return 8;
+        if (
+            angle >= -157.5 &&
+            angle < -112.5
+        ) {
+            return 8;
+        }
+
+        if (
+            angle >= -112.5 &&
+            angle < -67.5
+        ) {
+            return 8;
+        }
+
+        if (
+            angle >= -67.5 &&
+            angle < -22.5
+        ) {
+            return 8;
+        }
+
+        return 0;
     }
 
-    //==================================================
-    // 移動搖桿
-    //==================================================
-
     function processPointer(clientX, clientY) {
-        if (!joystick || !stick) return;
+
+        if (!joystick || !stick) {
+            return;
+        }
 
         const rect =
             joystick.getBoundingClientRect();
@@ -244,8 +321,11 @@
         const cy =
             rect.top + rect.height / 2;
 
-        let dx = clientX - cx;
-        let dy = clientY - cy;
+        let dx =
+            clientX - cx;
+
+        let dy =
+            clientY - cy;
 
         const distance =
             Math.sqrt(dx * dx + dy * dy);
@@ -258,8 +338,14 @@
             );
 
         if (distance > maxDistance) {
-            dx = dx / distance * maxDistance;
-            dy = dy / distance * maxDistance;
+
+            dx =
+                dx / distance *
+                maxDistance;
+
+            dy =
+                dy / distance *
+                maxDistance;
         }
 
         const stickRect =
@@ -283,30 +369,39 @@
             getDirection(dx, dy);
     }
 
-    //==================================================
-    // 執行角色移動
-    //==================================================
-
     function movePlayerByJoystick() {
-        if (!currentDirection) return;
-        if (!canUseJoystick()) return;
 
-        const now = performance.now();
+        if (!currentDirection) {
+            return;
+        }
 
-        if (now - lastMoveTime < MOVE_INTERVAL) {
+        if (!canUseJoystick()) {
+            return;
+        }
+
+        const now =
+            performance.now();
+
+        if (
+            now - lastMoveTime <
+            MOVE_INTERVAL
+        ) {
             return;
         }
 
         lastMoveTime = now;
 
-        $gamePlayer.executeMove(currentDirection);
+        /*
+         * 使用 RPG Maker 原生移動方式。
+         * 不修改原本 TouchMoveForSymbolEncount 的 searchLimit。
+         */
+        $gamePlayer.executeMove(
+            currentDirection
+        );
     }
 
-    //==================================================
-    // Pointer Down
-    //==================================================
-
     function onPointerDown(event) {
+
         if (
             event.pointerType === "mouse" &&
             event.button !== 0
@@ -321,7 +416,8 @@
             return;
         }
 
-        activePointerId = event.pointerId;
+        activePointerId =
+            event.pointerId;
 
         try {
             joystick.setPointerCapture(
@@ -337,13 +433,11 @@
         movePlayerByJoystick();
     }
 
-    //==================================================
-    // Pointer Move
-    //==================================================
-
     function onPointerMove(event) {
+
         if (
-            activePointerId !== event.pointerId
+            activePointerId !==
+            event.pointerId
         ) {
             return;
         }
@@ -359,14 +453,12 @@
         movePlayerByJoystick();
     }
 
-    //==================================================
-    // Pointer Up
-    //==================================================
-
     function onPointerUp(event) {
+
         if (
             activePointerId !== null &&
-            event.pointerId !== activePointerId
+            event.pointerId !==
+            activePointerId
         ) {
             return;
         }
@@ -377,21 +469,19 @@
         resetStick();
     }
 
-    //==================================================
-    // 顯示／隱藏
-    //==================================================
-
     function updateVisibility() {
-        if (!joystick) return;
 
-        const scene = SceneManager._scene;
+        if (!joystick) {
+            return;
+        }
+
+        const scene =
+            SceneManager._scene;
 
         const visible =
             scene instanceof Scene_Map &&
-            (!$gameMessage ||
-             !$gameMessage.isBusy()) &&
-            (!$gameMap ||
-             !$gameMap.isEventRunning());
+            !$gameMessage.isBusy() &&
+            !$gameMap.isEventRunning();
 
         joystick.style.display =
             visible ? "block" : "none";
@@ -404,49 +494,63 @@
         }
     }
 
+
     //==================================================
-    // Scene_Map 啟動
+    // Scene_Map
     //==================================================
 
     const _Scene_Map_start =
         Scene_Map.prototype.start;
 
-    Scene_Map.prototype.start = function() {
-        _Scene_Map_start.call(this);
+    Scene_Map.prototype.start =
+        function() {
 
-        setTimeout(() => {
-            createJoystick();
-            updateJoystickPosition();
-            updateVisibility();
-        }, 0);
-    };
+            _Scene_Map_start.call(this);
 
-    //==================================================
-    // Scene_Map 更新
-    //==================================================
+            setTimeout(() => {
+
+                createJoystick();
+
+                updateJoystickPosition();
+
+                updateVisibility();
+
+            }, 0);
+        };
+
 
     const _Scene_Map_update =
         Scene_Map.prototype.update;
 
-    Scene_Map.prototype.update = function() {
-        _Scene_Map_update.call(this);
+    Scene_Map.prototype.update =
+        function() {
 
-        createJoystick();
-        updateJoystickPosition();
-        updateVisibility();
+            _Scene_Map_update.call(this);
 
-        if (activePointerId !== null) {
-            movePlayerByJoystick();
+            createJoystick();
+
+            updateJoystickPosition();
+
+            updateVisibility();
+
+            if (
+                activePointerId !== null
+            ) {
+                movePlayerByJoystick();
+            }
+        };
+
+
+    //==================================================
+    // 視窗大小 / 手機橫豎轉
+    //==================================================
+
+    window.addEventListener(
+        "resize",
+        () => {
+            updateJoystickPosition();
         }
-    };
-
-    //==================================================
-    // 螢幕大小變化
-    //==================================================
-
-    window.addEventListener("resize", () => {
-        updateJoystickPosition();
-    });
+    );
 
     window.addEventListener(
         "orientationchange",
@@ -458,45 +562,54 @@
         }
     );
 
+
     //==================================================
-    // 防止搖桿觸控冒泡
+    // 防止搖桿觸控傳給 RPG Maker 原生觸控移動
     //==================================================
 
     document.addEventListener(
         "touchstart",
         event => {
+
             if (
                 joystick &&
                 joystick.contains(event.target)
             ) {
                 event.preventDefault();
             }
+
         },
         { passive: false }
     );
+
 
     document.addEventListener(
         "touchmove",
         event => {
+
             if (
                 joystick &&
                 joystick.contains(event.target)
             ) {
                 event.preventDefault();
             }
+
         },
         { passive: false }
     );
 
+
     document.addEventListener(
         "touchend",
         event => {
+
             if (
                 joystick &&
                 joystick.contains(event.target)
             ) {
                 event.preventDefault();
             }
+
         },
         { passive: false }
     );
