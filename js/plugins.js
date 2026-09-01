@@ -4,11 +4,11 @@ var $plugins =
 [
 {"name":"ButtonPicture","status":true,"description":"Makes a picture clickable.","parameters":{}},
 {"name":"SmoothTouchMove","status":false,"description":"在触摸移动时允许玩家穿过位于脚下的事件。","parameters":{}},
-{"name":"TouchMoveForSymbolEncount","status":true,"description":"在触摸移动时不会避开事件符号。","parameters":{}},
+{"name":"TouchMoveForSymbolEncount","status":false,"description":"在触摸移动时不会避开事件符号。","parameters":{}},
 {"name":"MobileScreenScale","status":true,"description":"手機畫面縮放測試","parameters":{}},
 {"name":"EnemyHpBar_MZ","status":true,"description":"v1.0.0 戰鬥怪物HP血條，顯示於敵人上方","parameters":{"Bar Width":"140","Bar Height":"14","Bar Y Offset":"-20","Show Name":"true","Show HP Text":"false","Name Font Size":"20","HP Font Size":"16","HP Color":"#FFFFFF","Bar Background":"#333333","Bar Color":"#E53935","Border Color":"#000000","Opacity":"255","Show Dead":"false"}},
 {"name":"QuestSystem_MZ","status":true,"description":"v1.0.0 完整任務系統：任務列表、追蹤、擊殺/收集計數","parameters":{"Max Track":"1","Window Width":"760","Window Height":"520","Tracker Width":"360","Tracker Font Size":"20","Show Tracker":"true","Complete SE":"Applause1"}},
 {"name":"MiniMap_MZ","status":true,"description":"v1.0.0 小地圖系統，支援主角、NPC、寶箱與敵人標記","parameters":{"MapWidth":"220","MapHeight":"160","MapMargin":"15","BackgroundOpacity":"180","PlayerColor":"#00aaff","NpcColor":"#ffff00","EnemyColor":"#ff3333","ChestColor":"#ffaa00","BorderColor":"#ffffff","PlayerSize":"6","ShowNpc":"true","ShowEnemy":"true","ShowChest":"true","ShowMapName":"true"}},
 {"name":"UI_MapQuestLayout_Fix","status":true,"description":"v1.0 修正任務追蹤與小地圖位置重疊、遊戲視窗縮放後位置沒有更新","parameters":{}},
-{"name":"VirtualJoystick_MZ","status":false,"description":"v1.0.0 手機虛擬搖桿：支援觸控移動、鍵盤操作與自動適應畫面","parameters":{"Enabled":"true","Joystick Size":"140","Knob Size":"58","Left Margin":"25","Bottom Margin":"30","Opacity":"150","Dead Zone":"15","Direction Threshold":"25","Move Interval":"5","Show On Desktop":"true","Hide During Events":"true","Hide During Menu":"true","Background Color":"rgba(80,80,80,0.65)","Knob Color":"rgba(220,220,220,0.85)"}}
+{"name":"VirtualJoystick_MZ","status":true,"description":"v1.0.0 手機虛擬搖桿：支援觸控移動、鍵盤操作與自動適應畫面","parameters":{"Enabled":"true","Joystick Size":"140","Knob Size":"58","Left Margin":"25","Bottom Margin":"30","Opacity":"150","Dead Zone":"15","Direction Threshold":"25","Move Interval":"5","Show On Desktop":"true","Hide During Events":"true","Hide During Menu":"true","Background Color":"rgba(80,80,80,0.65)","Knob Color":"rgba(220,220,220,0.85)"}}
 ];
