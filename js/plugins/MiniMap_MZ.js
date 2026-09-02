@@ -1,33 +1,57 @@
 /*:
  * @target MZ
- * @plugindesc v1.2.2 小地圖系統：玩家、NPC、事件、手機自適應、與任務視窗並排
+ * @plugindesc v1.3.0 小地圖系統：玩家、事件、手機自適應、任務並排、指定地圖隱藏
  * @author ChatGPT
  *
  * @help
  * ============================================================================
- * MiniMap_MZ v1.2.2
+ * MiniMap_MZ v1.3.0
  * ============================================================================
  *
  * 功能：
  *
- * 1. 顯示目前地圖
- * 2. 玩家藍色標記
- * 3. <MiniMap> 事件黃色標記
- * 4. 玩家移動同步
- * 5. 地圖切換自動更新
- * 6. 電腦 / 手機自適應
- * 7. 與 QuestSystem_MZ 任務視窗自動並排
+ * 1. 顯示目前地圖的小地圖
+ * 2. 玩家顯示藍色圓點
+ * 3. 指定事件顯示黃色圓點
+ * 4. 玩家移動時同步更新
+ * 5. 小地圖固定右上角
+ * 6. 自動避開右上角 MZ 選單
+ * 7. 支援 1280 × 720
+ * 8. 支援手機橫向
+ * 9. 地圖切換後自動更新
+ * 10. 可指定地圖隱藏小地圖
+ * 11. 與 QuestSystem_MZ 任務視窗並排
  *
  * ============================================================================
  *
- * 事件備註：
+ * 事件顯示方式：
+ *
+ * 在事件的「備註」加入：
  *
  * <MiniMap>
  *
- * 就會在小地圖顯示黃色標記。
+ * 該事件就會顯示黃色標記。
  *
  * ============================================================================
  *
+ * 隱藏小地圖：
+ *
+ * 插件參數：
+ *
+ * 「隱藏小地圖的地圖ID」
+ *
+ * 例如：
+ *
+ * 28
+ *
+ * 多張地圖：
+ *
+ * 28,29,30
+ *
+ * ============================================================================
+ */
+
+/*:
  * @param Map Width
  * @text 小地圖寬度
  * @type number
@@ -43,16 +67,16 @@
  * @default 200
  *
  * @param Map Margin
- * @text 小地圖邊距
+ * @text 小地圖右側距離
  * @type number
  * @min 0
- * @default 15
+ * @default 20
  *
  * @param Map Top
- * @text 小地圖上方位置
+ * @text 小地圖上方距離
  * @type number
  * @min 0
- * @default 15
+ * @default 75
  *
  * @param Border Width
  * @text 邊框寬度
@@ -66,7 +90,7 @@
  * @type number
  * @min 0
  * @max 255
- * @default 180
+ * @default 220
  *
  * @param Player Size
  * @text 玩家標記大小
@@ -102,6 +126,12 @@
  * @on 顯示
  * @off 隱藏
  * @default true
+ *
+ * @param Hidden Map IDs
+ * @text 隱藏小地圖的地圖ID
+ * @type string
+ * @default 28
+ * @desc 指定地圖時隱藏小地圖。多個地圖請用逗號，例如：28,29,30
  */
 
 (() => {
@@ -109,78 +139,59 @@
 
     const PLUGIN_NAME = "MiniMap_MZ";
 
-    const P =
-        PluginManager.parameters(
-            PLUGIN_NAME
-        );
+    // =========================================================================
+    // 插件參數
+    // =========================================================================
 
-    const MAP_WIDTH =
-        Number(
-            P["Map Width"] || 300
-        );
+    const params = PluginManager.parameters(PLUGIN_NAME);
 
-    const MAP_HEIGHT =
-        Number(
-            P["Map Height"] || 200
-        );
-
-    const MAP_MARGIN =
-        Number(
-            P["Map Margin"] || 15
-        );
-
-    const MAP_TOP =
-        Number(
-            P["Map Top"] || 15
-        );
-
-    const BORDER_WIDTH =
-        Number(
-            P["Border Width"] || 3
-        );
-
-    const BACKGROUND_OPACITY =
-        Number(
-            P["Background Opacity"] || 180
-        );
-
-    const PLAYER_SIZE =
-        Number(
-            P["Player Size"] || 8
-        );
-
-    const EVENT_SIZE =
-        Number(
-            P["Event Size"] || 6
-        );
-
-    const UPDATE_RATE =
-        Number(
-            P["Update Rate"] || 10
-        );
+    const MAP_WIDTH = Number(params["Map Width"] || 300);
+    const MAP_HEIGHT = Number(params["Map Height"] || 200);
+    const MAP_MARGIN = Number(params["Map Margin"] || 20);
+    const MAP_TOP = Number(params["Map Top"] || 75);
+    const BORDER_WIDTH = Number(params["Border Width"] || 3);
+    const BACKGROUND_OPACITY = Number(
+        params["Background Opacity"] || 220
+    );
+    const PLAYER_SIZE = Number(params["Player Size"] || 8);
+    const EVENT_SIZE = Number(params["Event Size"] || 6);
+    const UPDATE_RATE = Number(params["Update Rate"] || 10);
 
     const SHOW_EVENTS =
-        String(
-            P["Show Events"] || "true"
-        ) === "true";
+        String(params["Show Events"] || "true") === "true";
 
     const SHOW_PLAYER =
-        String(
-            P["Show Player"] || "true"
-        ) === "true";
+        String(params["Show Player"] || "true") === "true";
 
     // =========================================================================
-    // 小地圖 Window
+    // 隱藏小地圖的地圖 ID
     // =========================================================================
 
-    class Window_MiniMap
-        extends Window_Base {
+    const HIDDEN_MAP_IDS = String(
+        params["Hidden Map IDs"] || "28"
+    )
+        .split(",")
+        .map(id => Number(id.trim()))
+        .filter(id => Number.isFinite(id) && id > 0);
+
+    function isMiniMapHidden() {
+        if (!$gameMap) {
+            return false;
+        }
+
+        return HIDDEN_MAP_IDS.includes($gameMap.mapId());
+    }
+
+    // =========================================================================
+    // 小地圖視窗
+    // =========================================================================
+
+    class Window_MiniMap extends Window_Base {
 
         initialize(rect) {
-
             super.initialize(rect);
 
-            this._lastMapId = -1;
+            this._lastMapId = 0;
             this._lastPlayerX = -1;
             this._lastPlayerY = -1;
             this._frameCounter = 0;
@@ -191,77 +202,64 @@
             this.refresh();
         }
 
-        update() {
+        // =====================================================================
+        // 更新
+        // =====================================================================
 
+        update() {
             super.update();
+
+            if (isMiniMapHidden()) {
+                return;
+            }
 
             this._frameCounter++;
 
-            if (
-                this._frameCounter <
-                UPDATE_RATE
-            ) {
+            if (this._frameCounter < UPDATE_RATE) {
                 return;
             }
 
             this._frameCounter = 0;
 
-            if (
-                !$gameMap ||
-                !$gamePlayer
-            ) {
+            if (!$gameMap || !$gamePlayer) {
                 return;
             }
 
-            const mapId =
-                $gameMap.mapId();
+            const mapId = $gameMap.mapId();
+            const playerX = $gamePlayer.x;
+            const playerY = $gamePlayer.y;
 
-            const px =
-                $gamePlayer.x;
-
-            const py =
-                $gamePlayer.y;
-
-            if (
-                mapId !==
-                this._lastMapId
-            ) {
-
-                this._lastMapId =
-                    mapId;
-
-                this._lastPlayerX =
-                    px;
-
-                this._lastPlayerY =
-                    py;
+            if (mapId !== this._lastMapId) {
+                this._lastMapId = mapId;
+                this._lastPlayerX = playerX;
+                this._lastPlayerY = playerY;
 
                 this.refresh();
-
                 return;
             }
 
             if (
-                px !== this._lastPlayerX ||
-                py !== this._lastPlayerY
+                playerX !== this._lastPlayerX ||
+                playerY !== this._lastPlayerY
             ) {
-
-                this._lastPlayerX = px;
-                this._lastPlayerY = py;
+                this._lastPlayerX = playerX;
+                this._lastPlayerY = playerY;
 
                 this.refresh();
             }
         }
 
-        refresh() {
+        // =====================================================================
+        // 重新繪製
+        // =====================================================================
 
+        refresh() {
             this.contents.clear();
 
-            if (!$gameMap) {
+            if (!$gameMap || !$dataMap) {
                 return;
             }
 
-            this.drawBackground();
             this.drawMap();
 
             if (SHOW_EVENTS) {
@@ -276,54 +274,34 @@
         }
 
         // =====================================================================
-        // 背景
-        // =====================================================================
-
-        drawBackground() {
-
-            this.contents.paintOpacity =
-                BACKGROUND_OPACITY;
-
-            this.contents.fillRect(
-                0,
-                0,
-                this.contentsWidth(),
-                this.contentsHeight(),
-                "#111111"
-            );
-
-            this.contents.paintOpacity =
-                255;
-        }
-
-        // =====================================================================
         // 地圖縮放
         // =====================================================================
 
         mapScale() {
+            const mapWidth = $gameMap.width();
+            const mapHeight = $gameMap.height();
 
-            const mapWidth =
-                $gameMap.width();
-
-            const mapHeight =
-                $gameMap.height();
+            if (mapWidth <= 0 || mapHeight <= 0) {
+                return {
+                    scaleX: 1,
+                    scaleY: 1
+                };
+            }
 
             return {
-                scaleX:
-                    this.contentsWidth() /
-                    Math.max(1, mapWidth),
-
-                scaleY:
-                    this.contentsHeight() /
-                    Math.max(1, mapHeight)
+                scaleX: this.contentsWidth() / mapWidth,
+                scaleY: this.contentsHeight() / mapHeight
             };
         }
 
         // =====================================================================
-        // 判斷通行
+        // 判斷地圖格是否可以通行
         // =====================================================================
 
         isPassable(x, y) {
+            if (!$gameMap) {
+                return false;
+            }
 
             if (
                 x < 0 ||
@@ -347,65 +325,32 @@
         // =====================================================================
 
         drawMap() {
+            const mapWidth = $gameMap.width();
+            const mapHeight = $gameMap.height();
+            const scale = this.mapScale();
 
-            const scale =
-                this.mapScale();
+            for (let y = 0; y < mapHeight; y++) {
+                for (let x = 0; x < mapWidth; x++) {
 
-            const mapWidth =
-                $gameMap.width();
+                    const px = Math.floor(
+                        x * scale.scaleX
+                    );
 
-            const mapHeight =
-                $gameMap.height();
+                    const py = Math.floor(
+                        y * scale.scaleY
+                    );
 
-            for (
-                let y = 0;
-                y < mapHeight;
-                y++
-            ) {
+                    const pw = Math.ceil(
+                        scale.scaleX
+                    );
 
-                for (
-                    let x = 0;
-                    x < mapWidth;
-                    x++
-                ) {
+                    const ph = Math.ceil(
+                        scale.scaleY
+                    );
 
-                    const px =
-                        Math.floor(
-                            x *
-                            scale.scaleX
-                        );
+                    if (this.isPassable(x, y)) {
 
-                    const py =
-                        Math.floor(
-                            y *
-                            scale.scaleY
-                        );
-
-                    const pw =
-                        Math.max(
-                            1,
-                            Math.ceil(
-                                scale.scaleX
-                            )
-                        );
-
-                    const ph =
-                        Math.max(
-                            1,
-                            Math.ceil(
-                                scale.scaleY
-                            )
-                        );
-
-                    if (
-                        this.isPassable(
-                            x,
-                            y
-                        )
-                    ) {
-
-                        this.contents.paintOpacity =
-                            180;
+                        this.contents.paintOpacity = 180;
 
                         this.contents.fillRect(
                             px,
@@ -417,8 +362,7 @@
 
                     } else {
 
-                        this.contents.paintOpacity =
-                            80;
+                        this.contents.paintOpacity = 80;
 
                         this.contents.fillRect(
                             px,
@@ -431,63 +375,53 @@
                 }
             }
 
-            this.contents.paintOpacity =
-                255;
+            this.contents.paintOpacity = 255;
         }
 
         // =====================================================================
-        // 事件
+        // 畫事件
         // =====================================================================
 
         drawEvents() {
+            if (!$gameMap) {
+                return;
+            }
 
-            const scale =
-                this.mapScale();
+            const scale = this.mapScale();
+            const events = $gameMap.events();
 
-            for (
-                const event of
-                $gameMap.events()
-            ) {
+            events.forEach(event => {
 
-                if (!event) continue;
+                if (!event) {
+                    return;
+                }
 
                 if (event._erased) {
-                    continue;
+                    return;
                 }
 
-                const data =
-                    event.event();
+                const eventData = event.event();
 
-                if (!data) continue;
-
-                const note =
-                    data.note || "";
-
-                if (
-                    !/<MiniMap>/i.test(
-                        note
-                    )
-                ) {
-                    continue;
+                if (!eventData) {
+                    return;
                 }
 
-                const px =
-                    Math.floor(
-                        (
-                            event.x +
-                            0.5
-                        ) *
-                        scale.scaleX
-                    );
+                const note = eventData.note || "";
 
-                const py =
-                    Math.floor(
-                        (
-                            event.y +
-                            0.5
-                        ) *
-                        scale.scaleY
-                    );
+                // 必須有 <MiniMap>
+                if (!/<MiniMap>/i.test(note)) {
+                    return;
+                }
+
+                const px = Math.floor(
+                    (event.x + 0.5) *
+                    scale.scaleX
+                );
+
+                const py = Math.floor(
+                    (event.y + 0.5) *
+                    scale.scaleY
+                );
 
                 this.drawCircle(
                     px,
@@ -495,40 +429,31 @@
                     EVENT_SIZE,
                     "#ffff00"
                 );
-            }
+            });
         }
 
         // =====================================================================
-        // 玩家
+        // 畫玩家
         // =====================================================================
 
         drawPlayer() {
-
             if (!$gamePlayer) {
                 return;
             }
 
-            const scale =
-                this.mapScale();
+            const scale = this.mapScale();
 
-            const px =
-                Math.floor(
-                    (
-                        $gamePlayer.x +
-                        0.5
-                    ) *
-                    scale.scaleX
-                );
+            const px = Math.floor(
+                ($gamePlayer.x + 0.5) *
+                scale.scaleX
+            );
 
-            const py =
-                Math.floor(
-                    (
-                        $gamePlayer.y +
-                        0.5
-                    ) *
-                    scale.scaleY
-                );
+            const py = Math.floor(
+                ($gamePlayer.y + 0.5) *
+                scale.scaleY
+            );
 
+            // 白色外框
             this.drawCircle(
                 px,
                 py,
@@ -536,6 +461,7 @@
                 "#ffffff"
             );
 
+            // 藍色玩家點
             this.drawCircle(
                 px,
                 py,
@@ -545,23 +471,15 @@
         }
 
         // =====================================================================
-        // 圓形
+        // 畫圓
         // =====================================================================
 
-        drawCircle(
-            x,
-            y,
-            radius,
-            color
-        ) {
-
-            const context =
-                this.contents.context;
+        drawCircle(x, y, radius, color) {
+            const context = this.contents.context;
 
             context.save();
 
-            context.fillStyle =
-                color;
+            context.fillStyle = color;
 
             context.beginPath();
 
@@ -578,29 +496,24 @@
             context.restore();
 
             if (
-                this.contents._baseTexture
+                this.contents._baseTexture &&
+                this.contents._baseTexture.update
             ) {
-                this.contents
-                    ._baseTexture
-                    .update();
+                this.contents._baseTexture.update();
             }
         }
 
         // =====================================================================
-        // 邊框
+        // 畫邊框
         // =====================================================================
 
         drawBorder() {
+            const width = this.contentsWidth();
+            const height = this.contentsHeight();
 
-            const width =
-                this.contentsWidth();
+            this.contents.paintOpacity = 255;
 
-            const height =
-                this.contentsHeight();
-
-            this.contents.paintOpacity =
-                255;
-
+            // 上
             this.contents.fillRect(
                 0,
                 0,
@@ -609,6 +522,7 @@
                 "#ffffff"
             );
 
+            // 下
             this.contents.fillRect(
                 0,
                 height - BORDER_WIDTH,
@@ -617,6 +531,7 @@
                 "#ffffff"
             );
 
+            // 左
             this.contents.fillRect(
                 0,
                 0,
@@ -625,6 +540,7 @@
                 "#ffffff"
             );
 
+            // 右
             this.contents.fillRect(
                 width - BORDER_WIDTH,
                 0,
@@ -642,78 +558,83 @@
     const _Scene_Map_createAllWindows =
         Scene_Map.prototype.createAllWindows;
 
-    Scene_Map.prototype.createAllWindows =
-        function() {
+    Scene_Map.prototype.createAllWindows = function() {
 
-            _Scene_Map_createAllWindows.call(
-                this
-            );
+        _Scene_Map_createAllWindows.call(this);
 
-            this.createMiniMap();
-
-            if (
-                this.updateTopHudLayout
-            ) {
-                this.updateTopHudLayout();
-            }
-        };
+        this.createMiniMap();
+    };
 
     // =========================================================================
-    // 建立
+    // 建立小地圖
     // =========================================================================
 
-    Scene_Map.prototype.createMiniMap =
-        function() {
+    Scene_Map.prototype.createMiniMap = function() {
 
-            const width =
-                Math.min(
-                    MAP_WIDTH,
-                    Graphics.boxWidth -
-                    MAP_MARGIN * 2
-                );
+        const width = Math.min(
+            MAP_WIDTH,
+            Graphics.boxWidth - MAP_MARGIN * 2
+        );
 
-            const height =
-                Math.min(
-                    MAP_HEIGHT,
-                    Graphics.boxHeight -
-                    MAP_TOP -
-                    MAP_MARGIN
-                );
+        const height = Math.min(
+            MAP_HEIGHT,
+            Graphics.boxHeight - MAP_TOP - MAP_MARGIN
+        );
 
-            const rect =
-                new Rectangle(
-                    Graphics.boxWidth -
-                    width -
-                    MAP_MARGIN,
+        let x;
+        let y;
 
-                    MAP_TOP,
+        // -------------------------------------------------------------
+        // 如果有 QuestSystem_MZ 任務視窗
+        // 就讓小地圖與任務視窗並排
+        // -------------------------------------------------------------
 
-                    width,
-                    height
-                );
+        if (this._questTracker) {
 
-            this._miniMap =
-                new Window_MiniMap(
-                    rect
-                );
+            x =
+                this._questTracker.x +
+                this._questTracker.width +
+                15;
 
-            this._miniMap.z = 21;
+            y =
+                this._questTracker.y;
 
-            this.addWindow(
-                this._miniMap
-            );
+        } else {
 
-            // ---------------------------------------------------------------
-            // ★ 如果 QuestSystem_MZ 存在
-            // ★ 立刻交給共同版面系統
-            // ---------------------------------------------------------------
+            x =
+                Graphics.boxWidth -
+                width -
+                MAP_MARGIN;
 
-            if (
-                this.updateTopHudLayout
-            ) {
-                this.updateTopHudLayout();
-            }
-        };
+            y = MAP_TOP;
+        }
+
+        const rect = new Rectangle(
+            x,
+            y,
+            width,
+            height
+        );
+
+        this._miniMap =
+            new Window_MiniMap(rect);
+
+        this._miniMap.z = 11;
+
+        // -------------------------------------------------------------
+        // ★ 指定地圖自動隱藏
+        // -------------------------------------------------------------
+
+        this._miniMap.visible =
+            !isMiniMapHidden();
+
+        this.addWindow(this._miniMap);
+
+        // 如果有任務插件，交給任務插件重新排版
+        if (this.updateTopHudLayout) {
+            this.updateTopHudLayout();
+        }
+    };
 
     // =========================================================================
     // Scene_Map 更新
@@ -722,36 +643,48 @@
     const _Scene_Map_update =
         Scene_Map.prototype.update;
 
-    Scene_Map.prototype.update =
-        function() {
+    Scene_Map.prototype.update = function() {
 
-            _Scene_Map_update.call(
-                this
-            );
+        _Scene_Map_update.call(this);
 
-            if (this._miniMap) {
+        if (!this._miniMap) {
+            return;
+        }
 
-                this._miniMap.update();
-            }
-        };
+        // -------------------------------------------------------------
+        // ★ 進入隱藏地圖 → 隱藏
+        // ★ 離開隱藏地圖 → 自動恢復
+        // -------------------------------------------------------------
+
+        const shouldShow =
+            !isMiniMapHidden();
+
+        this._miniMap.visible =
+            shouldShow;
+
+        if (shouldShow) {
+            this._miniMap.update();
+        }
+    };
 
     // =========================================================================
-    // 舊版相容
+    // 重新定位
     // =========================================================================
 
     Scene_Map.prototype.updateMiniMapPosition =
         function() {
 
+            if (!this._miniMap) {
+                return;
+            }
+
             if (
-                this.updateTopHudLayout
+                this.updateTopHudLayout &&
+                this._questTracker
             ) {
 
                 this.updateTopHudLayout();
 
-                return;
-            }
-
-            if (!this._miniMap) {
                 return;
             }
 
@@ -768,43 +701,43 @@
         };
 
     // =========================================================================
-    // 瀏覽器大小改變
+    // 視窗大小改變
     // =========================================================================
 
     window.addEventListener(
         "resize",
-        () => {
+        function() {
 
-            setTimeout(
-                () => {
+            if (
+                SceneManager._scene instanceof
+                Scene_Map
+            ) {
 
-                    const scene =
-                        SceneManager._scene;
+                setTimeout(
+                    function() {
 
-                    if (
-                        scene instanceof
-                        Scene_Map
-                    ) {
+                        const scene =
+                            SceneManager._scene;
 
                         if (
+                            scene &&
                             scene.updateTopHudLayout
                         ) {
 
-                            scene
-                                .updateTopHudLayout();
-                        }
+                            scene.updateTopHudLayout();
 
-                        if (
-                            scene._miniMap
+                        } else if (
+                            scene &&
+                            scene.updateMiniMapPosition
                         ) {
 
-                            scene._miniMap.refresh();
+                            scene.updateMiniMapPosition();
                         }
-                    }
 
-                },
-                150
-            );
+                    },
+                    100
+                );
+            }
         }
     );
 
@@ -814,28 +747,36 @@
 
     window.addEventListener(
         "orientationchange",
-        () => {
+        function() {
 
             setTimeout(
-                () => {
-
-                    const scene =
-                        SceneManager._scene;
+                function() {
 
                     if (
-                        scene instanceof
+                        SceneManager._scene instanceof
                         Scene_Map
                     ) {
 
+                        const scene =
+                            SceneManager._scene;
+
                         if (
+                            scene &&
                             scene.updateTopHudLayout
                         ) {
 
-                            scene
-                                .updateTopHudLayout();
+                            scene.updateTopHudLayout();
+
+                        } else if (
+                            scene &&
+                            scene.updateMiniMapPosition
+                        ) {
+
+                            scene.updateMiniMapPosition();
                         }
 
                         if (
+                            scene &&
                             scene._miniMap
                         ) {
 
