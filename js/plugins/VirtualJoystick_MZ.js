@@ -1,6 +1,6 @@
 /*:
  * @target MZ
- * @plugindesc Virtual Joystick - 大型虛擬搖桿版，不與地圖點擊移動重疊
+ * @plugindesc VirtualJoystick_MZ - 180x180 手機虛擬搖桿版
  * @author Custom
  *
  * @help
@@ -9,17 +9,19 @@
  * ============================================================
  *
  * 功能：
- * 1. 左下角顯示大型圓形虛擬搖桿
- * 2. 搖桿範圍為原本的 1.5 倍
- * 3. 搖桿範圍內完全禁止地圖點擊移動
- * 4. 搖桿範圍外仍可使用原本的地圖點擊移動
+ * 1. 左下角顯示虛擬搖桿
+ * 2. 搖桿大小 180 x 180
+ * 3. 搖桿完整範圍禁止地圖點擊
+ * 4. 搖桿範圍外仍可使用地圖點擊移動
  * 5. 支援手機觸控
- * 6. 支援滑鼠操作
+ * 6. 支援電腦滑鼠
  * 7. 四方向移動
- * 8. 不修改 TouchMoveForSymbolEncount
- * 9. 不修改 Game_Character.prototype.searchLimit
+ * 8. 防止搖桿觸控傳給 RPG Maker 地圖
+ * 9. 支援手機旋轉
+ * 10. 不修改 TouchMoveForSymbolEncount
+ * 11. 不修改 Game_Character.prototype.searchLimit
  *
- * 建議插件設定：
+ * 建議：
  *
  * VirtualJoystick_MZ.js        ON
  * TouchMoveForSymbolEncount.js OFF
@@ -32,39 +34,59 @@
     "use strict";
 
     // =========================================================
-    // 設定
+    // 基本設定
     // =========================================================
 
     const JOYSTICK_ID = "virtual-joystick-mz";
 
-    // 原本：150 x 150
-    // 現在：1.5 倍
-    const DESKTOP_SIZE = 225;
-    const MOBILE_SIZE  = 198;
+    // =========================================================
+    // 搖桿尺寸
+    // =========================================================
 
-    // 原本：64 / 58
-    // 現在：1.5 倍
-    const DESKTOP_STICK = 96;
-    const MOBILE_STICK  = 87;
+    const DESKTOP_SIZE = 180;
+    const MOBILE_SIZE  = 180;
 
-    // 搖桿中心死區
-    const DEAD_ZONE = 38;
+    // =========================================================
+    // 中心球尺寸
+    // =========================================================
 
-    // 移動間隔，數值越大移動越慢
+    const DESKTOP_STICK = 78;
+    const MOBILE_STICK  = 78;
+
+    // =========================================================
+    // 中心死區
+    // =========================================================
+
+    const DEAD_ZONE = 32;
+
+    // =========================================================
+    // 移動間隔
+    // 數值越大，移動越慢
+    // =========================================================
+
     const MOVE_INTERVAL = 140;
 
-    // 左下距離
+    // =========================================================
+    // 左下位置
+    // =========================================================
+
     const LEFT_MARGIN = 16;
     const BOTTOM_MARGIN = 16;
 
     // =========================================================
-    // 取得目前裝置是否為手機
+    // 判斷手機
     // =========================================================
 
     function isMobileDevice() {
+
         return (
             /Android|iPhone|iPad|iPod|Windows Phone/i.test(
                 navigator.userAgent
+            )
+            ||
+            (
+                navigator.maxTouchPoints > 0 &&
+                window.innerWidth <= 1024
             )
         );
     }
@@ -74,49 +96,74 @@
     // =========================================================
 
     function getJoystickSize() {
+
         return isMobileDevice()
             ? MOBILE_SIZE
             : DESKTOP_SIZE;
     }
 
+    // =========================================================
+    // 取得中心球尺寸
+    // =========================================================
+
     function getStickSize() {
+
         return isMobileDevice()
             ? MOBILE_STICK
             : DESKTOP_STICK;
     }
 
     // =========================================================
-    // 建立虛擬搖桿
+    // 建立搖桿
     // =========================================================
 
     function createJoystick() {
 
-        if (document.getElementById(JOYSTICK_ID)) {
+        if (
+            document.getElementById(
+                JOYSTICK_ID
+            )
+        ) {
             return;
         }
 
-        const size = getJoystickSize();
-        const stickSize = getStickSize();
+        const size =
+            getJoystickSize();
 
-        // -----------------------------------------------------
-        // 外層搖桿
-        // -----------------------------------------------------
+        const stickSize =
+            getStickSize();
 
-        const joystick = document.createElement("div");
+        // =====================================================
+        // 搖桿外圈
+        // =====================================================
 
-        joystick.id = JOYSTICK_ID;
+        const joystick =
+            document.createElement("div");
 
-        joystick.style.position = "fixed";
+        joystick.id =
+            JOYSTICK_ID;
+
+        joystick.style.position =
+            "fixed";
+
         joystick.style.left =
-            "max(" + LEFT_MARGIN + "px, env(safe-area-inset-left))";
+            "max(" +
+            LEFT_MARGIN +
+            "px, env(safe-area-inset-left))";
 
         joystick.style.bottom =
-            "max(" + BOTTOM_MARGIN + "px, env(safe-area-inset-bottom))";
+            "max(" +
+            BOTTOM_MARGIN +
+            "px, env(safe-area-inset-bottom))";
 
-        joystick.style.width = size + "px";
-        joystick.style.height = size + "px";
+        joystick.style.width =
+            size + "px";
 
-        joystick.style.borderRadius = "50%";
+        joystick.style.height =
+            size + "px";
+
+        joystick.style.borderRadius =
+            "50%";
 
         joystick.style.background =
             "rgba(0,0,0,0.25)";
@@ -124,38 +171,60 @@
         joystick.style.border =
             "3px solid rgba(255,255,255,0.45)";
 
-        joystick.style.boxSizing = "border-box";
+        joystick.style.boxSizing =
+            "border-box";
 
-        joystick.style.zIndex = "999999";
+        joystick.style.zIndex =
+            "999999";
 
-        joystick.style.touchAction = "none";
+        /*
+         * 搖桿本身禁止瀏覽器手勢
+         */
+        joystick.style.touchAction =
+            "none";
 
-        joystick.style.userSelect = "none";
-        joystick.style.webkitUserSelect = "none";
+        joystick.style.userSelect =
+            "none";
+
+        joystick.style.webkitUserSelect =
+            "none";
+
+        joystick.style.webkitTouchCallout =
+            "none";
 
         joystick.style.webkitTapHighlightColor =
             "transparent";
 
-        joystick.style.pointerEvents = "auto";
+        joystick.style.pointerEvents =
+            "auto";
 
-        // -----------------------------------------------------
-        // 搖桿中心
-        // -----------------------------------------------------
+        // =====================================================
+        // 中心球
+        // =====================================================
 
-        const stick = document.createElement("div");
+        const stick =
+            document.createElement("div");
 
-        stick.style.position = "absolute";
+        stick.style.position =
+            "absolute";
 
-        stick.style.width = stickSize + "px";
-        stick.style.height = stickSize + "px";
+        stick.style.width =
+            stickSize + "px";
 
-        stick.style.left = "50%";
-        stick.style.top = "50%";
+        stick.style.height =
+            stickSize + "px";
+
+        stick.style.left =
+            "50%";
+
+        stick.style.top =
+            "50%";
 
         stick.style.transform =
             "translate(-50%, -50%)";
 
-        stick.style.borderRadius = "50%";
+        stick.style.borderRadius =
+            "50%";
 
         stick.style.background =
             "rgba(255,255,255,0.55)";
@@ -166,41 +235,85 @@
         stick.style.boxShadow =
             "0 2px 8px rgba(0,0,0,0.35)";
 
-        stick.style.boxSizing = "border-box";
+        stick.style.boxSizing =
+            "border-box";
 
-        stick.style.pointerEvents = "none";
+        /*
+         * 中心球不接收事件，
+         * 由外圈統一接收。
+         */
+        stick.style.pointerEvents =
+            "none";
 
-        joystick.appendChild(stick);
+        joystick.appendChild(
+            stick
+        );
 
-        document.body.appendChild(joystick);
+        document.body.appendChild(
+            joystick
+        );
 
         // =====================================================
-        // 搖桿狀態
+        // 狀態
         // =====================================================
 
         let active = false;
+
         let pointerId = null;
 
         let lastDirection = 0;
+
         let lastMoveTime = 0;
+
+        // =====================================================
+        // 判斷是否在搖桿範圍
+        //
+        // 整個 180 x 180 區域
+        // 都禁止地圖點擊
+        // =====================================================
+
+        function isJoystickTarget(
+            target
+        ) {
+
+            return (
+                target === joystick ||
+                joystick.contains(target)
+            );
+        }
 
         // =====================================================
         // 計算方向
         // =====================================================
 
-        function getDirection(dx, dy) {
+        function getDirection(
+            dx,
+            dy
+        ) {
 
-            const distance = Math.sqrt(
-                dx * dx + dy * dy
-            );
+            const distance =
+                Math.sqrt(
+                    dx * dx +
+                    dy * dy
+                );
 
+            // -------------------------------------------------
             // 死區
-            if (distance < DEAD_ZONE) {
+            // -------------------------------------------------
+
+            if (
+                distance <
+                DEAD_ZONE
+            ) {
+
                 return 0;
             }
 
             const angle =
-                Math.atan2(dy, dx) *
+                Math.atan2(
+                    dy,
+                    dx
+                ) *
                 180 /
                 Math.PI;
 
@@ -218,6 +331,7 @@
                 angle >= -45 &&
                 angle < 45
             ) {
+
                 return 6;
             }
 
@@ -226,6 +340,7 @@
                 angle >= 45 &&
                 angle < 135
             ) {
+
                 return 2;
             }
 
@@ -234,6 +349,7 @@
                 angle >= 135 ||
                 angle < -135
             ) {
+
                 return 4;
             }
 
@@ -242,43 +358,71 @@
         }
 
         // =====================================================
-        // 移動
+        // 移動玩家
         // =====================================================
 
-        function movePlayer(direction) {
+        function movePlayer(
+            direction
+        ) {
 
             if (!direction) {
                 return;
             }
 
-            const now = performance.now();
+            const now =
+                performance.now();
 
             if (
-                now - lastMoveTime <
+                now -
+                lastMoveTime <
                 MOVE_INTERVAL
             ) {
+
                 return;
             }
 
-            lastMoveTime = now;
+            lastMoveTime =
+                now;
+
+            if (
+                typeof $gamePlayer ===
+                "undefined"
+            ) {
+
+                return;
+            }
 
             if (!$gamePlayer) {
                 return;
             }
 
-            if ($gameMap &&
-                $gameMap.isEventRunning()) {
+            // -------------------------------------------------
+            // 事件執行中不移動
+            // -------------------------------------------------
+
+            if (
+                $gameMap &&
+                $gameMap.isEventRunning()
+            ) {
+
                 return;
             }
+
+            // -------------------------------------------------
+            // 訊息視窗開啟時不移動
+            // -------------------------------------------------
 
             if (
                 $gameMessage &&
                 $gameMessage.isBusy()
             ) {
+
                 return;
             }
 
-            $gamePlayer.executeMove(direction);
+            $gamePlayer.executeMove(
+                direction
+            );
         }
 
         // =====================================================
@@ -288,11 +432,16 @@
         function resetJoystick() {
 
             active = false;
+
             pointerId = null;
+
             lastDirection = 0;
 
-            stick.style.left = "50%";
-            stick.style.top = "50%";
+            stick.style.left =
+                "50%";
+
+            stick.style.top =
+                "50%";
 
             stick.style.transform =
                 "translate(-50%, -50%)";
@@ -302,7 +451,10 @@
         // 更新搖桿位置
         // =====================================================
 
-        function updateJoystick(clientX, clientY) {
+        function updateJoystick(
+            clientX,
+            clientY
+        ) {
 
             const rect =
                 joystick.getBoundingClientRect();
@@ -316,10 +468,16 @@
                 rect.height / 2;
 
             let dx =
-                clientX - centerX;
+                clientX -
+                centerX;
 
             let dy =
-                clientY - centerY;
+                clientY -
+                centerY;
+
+            // -------------------------------------------------
+            // 搖桿最大移動距離
+            // -------------------------------------------------
 
             const maxDistance =
                 rect.width / 2 -
@@ -333,7 +491,7 @@
                 );
 
             // -------------------------------------------------
-            // 限制搖桿最大移動範圍
+            // 限制中心球移動範圍
             // -------------------------------------------------
 
             if (
@@ -346,6 +504,7 @@
                     distance;
 
                 dx *= ratio;
+
                 dy *= ratio;
             }
 
@@ -371,14 +530,19 @@
             // -------------------------------------------------
 
             const direction =
-                getDirection(dx, dy);
+                getDirection(
+                    dx,
+                    dy
+                );
 
             if (direction) {
 
                 lastDirection =
                     direction;
 
-                movePlayer(direction);
+                movePlayer(
+                    direction
+                );
             }
         }
 
@@ -391,23 +555,29 @@
             function(event) {
 
                 event.preventDefault();
+
                 event.stopPropagation();
+
                 event.stopImmediatePropagation();
 
                 active = true;
+
                 pointerId =
                     event.pointerId;
 
                 try {
+
                     joystick.setPointerCapture(
                         pointerId
                     );
+
                 } catch (e) {}
 
                 updateJoystick(
                     event.clientX,
                     event.clientY
                 );
+
             },
             true
         );
@@ -422,19 +592,24 @@
 
                 if (
                     !active ||
-                    event.pointerId !== pointerId
+                    event.pointerId !==
+                    pointerId
                 ) {
+
                     return;
                 }
 
                 event.preventDefault();
+
                 event.stopPropagation();
+
                 event.stopImmediatePropagation();
 
                 updateJoystick(
                     event.clientX,
                     event.clientY
                 );
+
             },
             true
         );
@@ -448,7 +623,9 @@
             function(event) {
 
                 event.preventDefault();
+
                 event.stopPropagation();
+
                 event.stopImmediatePropagation();
 
                 resetJoystick();
@@ -466,7 +643,9 @@
             function(event) {
 
                 event.preventDefault();
+
                 event.stopPropagation();
+
                 event.stopImmediatePropagation();
 
                 resetJoystick();
@@ -482,7 +661,9 @@
         joystick.addEventListener(
             "lostpointercapture",
             function() {
+
                 resetJoystick();
+
             }
         );
 
@@ -495,7 +676,9 @@
             function(event) {
 
                 event.preventDefault();
+
                 event.stopPropagation();
+
                 event.stopImmediatePropagation();
 
             },
@@ -514,7 +697,9 @@
             function(event) {
 
                 event.preventDefault();
+
                 event.stopPropagation();
+
                 event.stopImmediatePropagation();
 
             },
@@ -533,7 +718,9 @@
             function(event) {
 
                 event.preventDefault();
+
                 event.stopPropagation();
+
                 event.stopImmediatePropagation();
 
                 resetJoystick();
@@ -554,7 +741,9 @@
             function(event) {
 
                 event.preventDefault();
+
                 event.stopPropagation();
+
                 event.stopImmediatePropagation();
 
                 resetJoystick();
@@ -567,23 +756,9 @@
         );
 
         // =====================================================
-        // 判斷觸控是否在搖桿範圍
+        // 文件層級 TouchStart
         //
-        // 整個 225 x 225 / 198 x 198 區域
-        // 都視為「禁止地圖點擊」範圍
-        // =====================================================
-
-        function isJoystickTarget(target) {
-
-            return (
-                target === joystick ||
-                joystick.contains(target)
-            );
-        }
-
-        // =====================================================
-        // 文件層級 TouchStart 攔截
-        // 防止 RPG Maker TouchInput 收到搖桿觸控
+        // 只有搖桿範圍才攔截。
         // =====================================================
 
         document.addEventListener(
@@ -592,7 +767,8 @@
 
                 for (
                     let i = 0;
-                    i < event.changedTouches.length;
+                    i <
+                    event.changedTouches.length;
                     i++
                 ) {
 
@@ -607,11 +783,15 @@
 
                     if (
                         element &&
-                        isJoystickTarget(element)
+                        isJoystickTarget(
+                            element
+                        )
                     ) {
 
                         event.preventDefault();
+
                         event.stopPropagation();
+
                         event.stopImmediatePropagation();
 
                         return;
@@ -626,7 +806,7 @@
         );
 
         // =====================================================
-        // 文件層級 TouchMove 攔截
+        // 文件層級 TouchMove
         // =====================================================
 
         document.addEventListener(
@@ -635,7 +815,8 @@
 
                 for (
                     let i = 0;
-                    i < event.changedTouches.length;
+                    i <
+                    event.changedTouches.length;
                     i++
                 ) {
 
@@ -650,11 +831,15 @@
 
                     if (
                         element &&
-                        isJoystickTarget(element)
+                        isJoystickTarget(
+                            element
+                        )
                     ) {
 
                         event.preventDefault();
+
                         event.stopPropagation();
+
                         event.stopImmediatePropagation();
 
                         return;
@@ -669,7 +854,7 @@
         );
 
         // =====================================================
-        // 文件層級 TouchEnd 攔截
+        // 文件層級 TouchEnd
         // =====================================================
 
         document.addEventListener(
@@ -678,7 +863,8 @@
 
                 for (
                     let i = 0;
-                    i < event.changedTouches.length;
+                    i <
+                    event.changedTouches.length;
                     i++
                 ) {
 
@@ -693,11 +879,15 @@
 
                     if (
                         element &&
-                        isJoystickTarget(element)
+                        isJoystickTarget(
+                            element
+                        )
                     ) {
 
                         event.preventDefault();
+
                         event.stopPropagation();
+
                         event.stopImmediatePropagation();
 
                         resetJoystick();
@@ -714,12 +904,18 @@
         );
 
         // =====================================================
-        // 攔截 RPG Maker MZ TouchInput
-        // 防止搖桿區域觸發地圖點擊移動
+        // RPG Maker MZ TouchInput 保護
+        //
+        // 搖桿區域：
+        // 不讓 MZ 地圖收到點擊。
+        //
+        // 搖桿外：
+        // 完全保留原本地圖點擊。
         // =====================================================
 
         if (
-            typeof TouchInput !== "undefined"
+            typeof TouchInput !==
+            "undefined"
         ) {
 
             const originalTouchStart =
@@ -731,31 +927,32 @@
             const originalTouchEnd =
                 TouchInput._onTouchEnd;
 
+            // -------------------------------------------------
+            // Touch Start
+            // -------------------------------------------------
+
             TouchInput._onTouchStart =
                 function(event) {
 
-                    const x =
+                    const touch =
                         event.changedTouches &&
                         event.changedTouches[0]
-                            ? event.changedTouches[0].clientX
-                            : event.clientX;
-
-                    const y =
-                        event.changedTouches &&
-                        event.changedTouches[0]
-                            ? event.changedTouches[0].clientY
-                            : event.clientY;
+                            ? event.changedTouches[0]
+                            : event;
 
                     const element =
                         document.elementFromPoint(
-                            x,
-                            y
+                            touch.clientX,
+                            touch.clientY
                         );
 
                     if (
                         element &&
-                        isJoystickTarget(element)
+                        isJoystickTarget(
+                            element
+                        )
                     ) {
+
                         return;
                     }
 
@@ -764,6 +961,10 @@
                         arguments
                     );
                 };
+
+            // -------------------------------------------------
+            // Touch Move
+            // -------------------------------------------------
 
             TouchInput._onTouchMove =
                 function(event) {
@@ -790,8 +991,11 @@
 
                             if (
                                 element &&
-                                isJoystickTarget(element)
+                                isJoystickTarget(
+                                    element
+                                )
                             ) {
+
                                 return;
                             }
                         }
@@ -802,6 +1006,10 @@
                         arguments
                     );
                 };
+
+            // -------------------------------------------------
+            // Touch End
+            // -------------------------------------------------
 
             TouchInput._onTouchEnd =
                 function(event) {
@@ -828,7 +1036,9 @@
 
                             if (
                                 element &&
-                                isJoystickTarget(element)
+                                isJoystickTarget(
+                                    element
+                                )
                             ) {
 
                                 return;
@@ -844,14 +1054,10 @@
         }
 
         // =====================================================
-        // 隱藏 / 顯示
+        // 顯示 / 隱藏
         // =====================================================
 
         function updateVisibility() {
-
-            if (!joystick) {
-                return;
-            }
 
             const scene =
                 SceneManager._scene;
@@ -867,24 +1073,26 @@
                 $gameMap &&
                 $gameMap.isEventRunning();
 
-            joystick.style.display =
-                (
-                    isMap &&
-                    !messageBusy &&
-                    !eventRunning
-                )
-                ? "block"
-                : "none";
-
             if (
-                joystick.style.display === "none"
+                isMap &&
+                !messageBusy &&
+                !eventRunning
             ) {
+
+                joystick.style.display =
+                    "block";
+
+            } else {
+
+                joystick.style.display =
+                    "none";
+
                 resetJoystick();
             }
         }
 
         // =====================================================
-        // Scene 更新
+        // SceneManager 更新
         // =====================================================
 
         const _SceneManager_updateMain =
@@ -902,7 +1110,7 @@
             };
 
         // =====================================================
-        // 視窗尺寸變更
+        // 螢幕尺寸改變
         // =====================================================
 
         window.addEventListener(
@@ -930,6 +1138,10 @@
                 resetJoystick();
             }
         );
+
+        // =====================================================
+        // 手機方向改變
+        // =====================================================
 
         window.addEventListener(
             "orientationchange",
@@ -966,7 +1178,7 @@
     }
 
     // =========================================================
-    // 遊戲啟動後建立
+    // RPG Maker MZ 啟動後建立
     // =========================================================
 
     const _Scene_Boot_start =
@@ -982,7 +1194,9 @@
 
             setTimeout(
                 function() {
+
                     createJoystick();
+
                 },
                 100
             );
