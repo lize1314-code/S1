@@ -1,204 +1,752 @@
 /*:
  * @target MZ
- * @plugindesc v1.0.0 手機自動縮放遊戲畫面，保持16:9
- * @author ChatGPT
+ * @plugindesc MobileScreenScale - 1280x720 手機橫向滿版版
+ * @author Custom
  *
  * @help
- * ============================================================================
- * MobileScreenScale
- * ============================================================================
+ * ============================================================
+ * MobileScreenScale.js
+ * ============================================================
  *
- * RPG Maker MZ 手機畫面自動縮放插件
+ * 專門配合 RPG Maker MZ：
  *
- * 適用：
- *   Screen Width  = 1280
- *   Screen Height = 720
+ *     畫面寬度：1280
+ *     畫面高度：720
  *
- * 功能：
- *   - 手機瀏覽器自動放大遊戲畫面
- *   - 保持原始 16:9 比例
- *   - 不拉伸遊戲畫面
- *   - 手機旋轉後重新計算
- *   - Android Chrome 支援
- *   - iPhone Safari 支援
- *   - 電腦版不修改 MZ 原本的縮放
- *   - 不修改 rmmz_core.js
+ * 主要用途：
  *
- * ============================================================================
+ * 1. 手機橫向滿版
+ * 2. 16:9 等比例縮放
+ * 3. 不拉伸遊戲畫面
+ * 4. 自動置中
+ * 5. 支援手機旋轉
+ * 6. 支援瀏海與安全區域
+ * 7. 禁止手機網頁滑動
+ * 8. 禁止瀏覽器雙指縮放
+ * 9. 電腦瀏覽器正常顯示
+ * 10. 不修改 RPG Maker MZ 內部解析度
+ *
+ * ============================================================
  */
 
-(() => {
+(function() {
     "use strict";
 
-    // -------------------------------------------------------------------------
-    // 判斷是否為手機
-    // -------------------------------------------------------------------------
+    // =========================================================
+    // RPG Maker MZ 遊戲解析度
+    // =========================================================
+
+    const GAME_WIDTH = 1280;
+    const GAME_HEIGHT = 720;
+
+    const GAME_RATIO =
+        GAME_WIDTH / GAME_HEIGHT;
+
+    // =========================================================
+    // 基本 CSS
+    // =========================================================
+
+    function createStyle() {
+
+        if (
+            document.getElementById(
+                "mobile-screen-scale-style"
+            )
+        ) {
+            return;
+        }
+
+        const style =
+            document.createElement("style");
+
+        style.id =
+            "mobile-screen-scale-style";
+
+        style.textContent = `
+
+            html {
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+
+                overflow: hidden;
+
+                background: #000;
+
+                overscroll-behavior: none;
+
+                touch-action: none;
+
+                -webkit-text-size-adjust: 100%;
+            }
+
+            body {
+                width: 100%;
+                height: 100%;
+
+                margin: 0;
+                padding: 0;
+
+                overflow: hidden;
+
+                background: #000;
+
+                touch-action: none;
+
+                overscroll-behavior: none;
+
+                user-select: none;
+                -webkit-user-select: none;
+
+                -webkit-touch-callout: none;
+
+                -webkit-tap-highlight-color:
+                    transparent;
+            }
+
+            /*
+             * RPG Maker MZ Canvas
+             */
+
+            #GameCanvas {
+
+                position: fixed !important;
+
+                left: 50% !important;
+                top: 50% !important;
+
+                margin: 0 !important;
+                padding: 0 !important;
+
+                transform:
+                    translate(-50%, -50%) !important;
+
+                transform-origin:
+                    center center !important;
+
+                max-width: none !important;
+                max-height: none !important;
+
+                display: block !important;
+
+                touch-action: none !important;
+            }
+
+            /*
+             * 防止其他 Canvas 造成頁面尺寸增加
+             */
+
+            canvas {
+                display: block;
+            }
+
+        `;
+
+        document.head.appendChild(style);
+    }
+
+    // =========================================================
+    // 建立 / 修正 viewport
+    // =========================================================
+
+    function setupViewport() {
+
+        let viewport =
+            document.querySelector(
+                'meta[name="viewport"]'
+            );
+
+        if (!viewport) {
+
+            viewport =
+                document.createElement("meta");
+
+            viewport.name =
+                "viewport";
+
+            document.head.appendChild(
+                viewport
+            );
+        }
+
+        viewport.setAttribute(
+            "content",
+
+            "width=device-width," +
+            "height=device-height," +
+            "initial-scale=1.0," +
+            "minimum-scale=1.0," +
+            "maximum-scale=1.0," +
+            "user-scalable=no," +
+            "viewport-fit=cover"
+        );
+    }
+
+    // =========================================================
+    // 找到 RPG Maker Canvas
+    // =========================================================
+
+    function getGameCanvas() {
+
+        return (
+            document.getElementById(
+                "GameCanvas"
+            ) ||
+            document.querySelector(
+                "canvas"
+            )
+        );
+    }
+
+    // =========================================================
+    // 判斷手機
+    // =========================================================
 
     function isMobileDevice() {
-        const ua = navigator.userAgent || navigator.vendor || "";
 
-        return /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
-    }
-
-    // -------------------------------------------------------------------------
-    // 取得手機 viewport
-    // -------------------------------------------------------------------------
-
-    function getViewportWidth() {
-        return Math.max(
-            document.documentElement.clientWidth || 0,
-            window.innerWidth || 0
+        return (
+            /Android|iPhone|iPad|iPod|Windows Phone/i
+                .test(navigator.userAgent)
+            ||
+            (
+                navigator.maxTouchPoints > 0 &&
+                Math.max(
+                    window.innerWidth,
+                    window.innerHeight
+                ) <= 1400
+            )
         );
     }
 
-    function getViewportHeight() {
-        return Math.max(
-            document.documentElement.clientHeight || 0,
-            window.innerHeight || 0
+    // =========================================================
+    // 取得目前真正可用的螢幕尺寸
+    // =========================================================
+
+    function getViewportSize() {
+
+        let width =
+            window.innerWidth;
+
+        let height =
+            window.innerHeight;
+
+        /*
+         * VisualViewport 在手機瀏覽器
+         * 通常比 innerWidth / innerHeight
+         * 更準確。
+         */
+
+        if (
+            window.visualViewport
+        ) {
+
+            const viewport =
+                window.visualViewport;
+
+            if (
+                viewport.width > 0 &&
+                viewport.height > 0
+            ) {
+
+                width =
+                    viewport.width;
+
+                height =
+                    viewport.height;
+            }
+        }
+
+        return {
+            width: width,
+            height: height
+        };
+    }
+
+    // =========================================================
+    // 橫向判斷
+    // =========================================================
+
+    function isLandscape() {
+
+        const size =
+            getViewportSize();
+
+        return (
+            size.width >= size.height
         );
     }
 
-    // -------------------------------------------------------------------------
-    // 更新遊戲畫面
-    // -------------------------------------------------------------------------
+    // =========================================================
+    // 計算遊戲畫面
+    // =========================================================
 
-    function updateMobileScale() {
+    function resizeGame() {
 
-        if (!isMobileDevice()) {
+        const canvas =
+            getGameCanvas();
+
+        if (!canvas) {
             return;
         }
 
-        if (!Graphics) {
+        const viewport =
+            getViewportSize();
+
+        let viewportWidth =
+            viewport.width;
+
+        let viewportHeight =
+            viewport.height;
+
+        if (
+            viewportWidth <= 0 ||
+            viewportHeight <= 0
+        ) {
             return;
         }
 
-        if (!Graphics._canvas) {
+        // =====================================================
+        // 手機橫向
+        // =====================================================
+
+        if (
+            isMobileDevice() &&
+            isLandscape()
+        ) {
+
+            /*
+             * 16:9 等比例縮放
+             *
+             * 使用「較小比例」
+             * 確保整個遊戲畫面完整顯示。
+             */
+
+            const scaleX =
+                viewportWidth /
+                GAME_WIDTH;
+
+            const scaleY =
+                viewportHeight /
+                GAME_HEIGHT;
+
+            const scale =
+                Math.min(
+                    scaleX,
+                    scaleY
+                );
+
+            const displayWidth =
+                GAME_WIDTH * scale;
+
+            const displayHeight =
+                GAME_HEIGHT * scale;
+
+            canvas.style.width =
+                displayWidth + "px";
+
+            canvas.style.height =
+                displayHeight + "px";
+
+            canvas.style.left =
+                "50%";
+
+            canvas.style.top =
+                "50%";
+
+            canvas.style.transform =
+                "translate(-50%, -50%)";
+
+            canvas.style.position =
+                "fixed";
+
+            canvas.style.margin =
+                "0";
+
+            canvas.style.padding =
+                "0";
+
             return;
         }
 
-        const canvas = Graphics._canvas;
+        // =====================================================
+        // 手機直向
+        // =====================================================
 
-        const gameWidth = Graphics.width;
-        const gameHeight = Graphics.height;
+        if (
+            isMobileDevice() &&
+            !isLandscape()
+        ) {
 
-        if (!gameWidth || !gameHeight) {
+            /*
+             * 遊戲是 16:9 橫向。
+             *
+             * 直向時不強行拉伸。
+             * 保持 16:9 比例並置中。
+             */
+
+            const scaleX =
+                viewportWidth /
+                GAME_WIDTH;
+
+            const scaleY =
+                viewportHeight /
+                GAME_HEIGHT;
+
+            const scale =
+                Math.min(
+                    scaleX,
+                    scaleY
+                );
+
+            const displayWidth =
+                GAME_WIDTH * scale;
+
+            const displayHeight =
+                GAME_HEIGHT * scale;
+
+            canvas.style.width =
+                displayWidth + "px";
+
+            canvas.style.height =
+                displayHeight + "px";
+
+            canvas.style.left =
+                "50%";
+
+            canvas.style.top =
+                "50%";
+
+            canvas.style.transform =
+                "translate(-50%, -50%)";
+
+            canvas.style.position =
+                "fixed";
+
             return;
         }
 
-        const viewportWidth = getViewportWidth();
-        const viewportHeight = getViewportHeight();
+        // =====================================================
+        // 電腦 / 平板
+        // =====================================================
 
-        if (viewportWidth <= 0 || viewportHeight <= 0) {
-            return;
-        }
+        const scaleX =
+            viewportWidth /
+            GAME_WIDTH;
 
-        // -------------------------------------------------------------
-        // 計算保持原始比例的最大尺寸
-        // -------------------------------------------------------------
+        const scaleY =
+            viewportHeight /
+            GAME_HEIGHT;
 
-        const scaleX = viewportWidth / gameWidth;
-        const scaleY = viewportHeight / gameHeight;
+        const scale =
+            Math.min(
+                scaleX,
+                scaleY
+            );
 
-        const scale = Math.min(scaleX, scaleY);
+        const displayWidth =
+            GAME_WIDTH * scale;
 
-        const displayWidth = Math.floor(gameWidth * scale);
-        const displayHeight = Math.floor(gameHeight * scale);
+        const displayHeight =
+            GAME_HEIGHT * scale;
 
-        // -------------------------------------------------------------
-        // Canvas 顯示設定
-        // -------------------------------------------------------------
+        canvas.style.width =
+            displayWidth + "px";
 
-        canvas.style.position = "fixed";
+        canvas.style.height =
+            displayHeight + "px";
 
-        canvas.style.width = displayWidth + "px";
-        canvas.style.height = displayHeight + "px";
+        canvas.style.left =
+            "50%";
 
-        canvas.style.left = "50%";
-        canvas.style.top = "50%";
+        canvas.style.top =
+            "50%";
 
-        canvas.style.transform = "translate(-50%, -50%)";
+        canvas.style.transform =
+            "translate(-50%, -50%)";
 
-        canvas.style.margin = "0";
-        canvas.style.padding = "0";
+        canvas.style.position =
+            "fixed";
 
-        canvas.style.maxWidth = "none";
-        canvas.style.maxHeight = "none";
+        canvas.style.margin =
+            "0";
 
-        canvas.style.display = "block";
-
-        canvas.style.objectFit = "contain";
+        canvas.style.padding =
+            "0";
     }
 
-    // -------------------------------------------------------------------------
-    // 延遲更新
-    // -------------------------------------------------------------------------
+    // =========================================================
+    // 防止手機瀏覽器操作網頁
+    // =========================================================
 
-    function refreshScale() {
+    function preventBrowserGestures() {
 
-        setTimeout(updateMobileScale, 100);
-        setTimeout(updateMobileScale, 500);
-        setTimeout(updateMobileScale, 1000);
+        document.addEventListener(
+            "gesturestart",
+            function(event) {
+
+                event.preventDefault();
+
+            },
+            {
+                passive: false
+            }
+        );
+
+        document.addEventListener(
+            "gesturechange",
+            function(event) {
+
+                event.preventDefault();
+
+            },
+            {
+                passive: false
+            }
+        );
+
+        document.addEventListener(
+            "gestureend",
+            function(event) {
+
+                event.preventDefault();
+
+            },
+            {
+                passive: false
+            }
+        );
+
+        /*
+         * 防止手機上下拖曳網頁。
+         *
+         * 注意：
+         * 不在這裡攔截 touchstart / touchend，
+         * 避免影響 RPG Maker 及虛擬搖桿。
+         */
+
+        document.addEventListener(
+            "touchmove",
+            function(event) {
+
+                if (
+                    event.touches &&
+                    event.touches.length > 1
+                ) {
+
+                    event.preventDefault();
+                }
+
+            },
+            {
+                passive: false
+            }
+        );
     }
 
-    // -------------------------------------------------------------------------
-    // SceneManager 初始化完成
-    // -------------------------------------------------------------------------
+    // =========================================================
+    // Safe Area
+    // =========================================================
 
-    const _SceneManager_initialize = SceneManager.initialize;
+    function setupSafeArea() {
 
-    SceneManager.initialize = function() {
+        document.documentElement.style
+            .setProperty(
+                "--safe-area-top",
+                "env(safe-area-inset-top)"
+            );
 
-        _SceneManager_initialize.call(this);
+        document.documentElement.style
+            .setProperty(
+                "--safe-area-right",
+                "env(safe-area-inset-right)"
+            );
 
-        refreshScale();
-    };
+        document.documentElement.style
+            .setProperty(
+                "--safe-area-bottom",
+                "env(safe-area-inset-bottom)"
+            );
 
-    // -------------------------------------------------------------------------
-    // 瀏覽器尺寸改變
-    // -------------------------------------------------------------------------
+        document.documentElement.style
+            .setProperty(
+                "--safe-area-left",
+                "env(safe-area-inset-left)"
+            );
+    }
 
-    window.addEventListener("resize", function() {
+    // =========================================================
+    // 延遲重新計算
+    // =========================================================
 
-        refreshScale();
+    let resizeTimer = null;
 
-    });
+    function requestResize() {
 
-    // -------------------------------------------------------------------------
+        if (resizeTimer) {
+
+            clearTimeout(
+                resizeTimer
+            );
+        }
+
+        resizeTimer =
+            setTimeout(
+                function() {
+
+                    resizeGame();
+
+                    setupSafeArea();
+
+                },
+                80
+            );
+    }
+
+    // =========================================================
+    // 初始化
+    // =========================================================
+
+    function initialize() {
+
+        setupViewport();
+
+        createStyle();
+
+        setupSafeArea();
+
+        preventBrowserGestures();
+
+        resizeGame();
+
+        /*
+         * RPG Maker MZ Canvas
+         * 可能在初始化後才建立，
+         * 所以重新計算數次。
+         */
+
+        setTimeout(
+            resizeGame,
+            100
+        );
+
+        setTimeout(
+            resizeGame,
+            300
+        );
+
+        setTimeout(
+            resizeGame,
+            700
+        );
+
+        setTimeout(
+            resizeGame,
+            1200
+        );
+    }
+
+    // =========================================================
+    // DOM Ready
+    // =========================================================
+
+    if (
+        document.readyState ===
+        "loading"
+    ) {
+
+        document.addEventListener(
+            "DOMContentLoaded",
+            initialize
+        );
+
+    } else {
+
+        initialize();
+    }
+
+    // =========================================================
+    // 視窗大小變化
+    // =========================================================
+
+    window.addEventListener(
+        "resize",
+        requestResize
+    );
+
+    // =========================================================
     // 手機旋轉
-    // -------------------------------------------------------------------------
+    // =========================================================
 
-    window.addEventListener("orientationchange", function() {
+    window.addEventListener(
+        "orientationchange",
+        function() {
 
-        setTimeout(function() {
+            setTimeout(
+                requestResize,
+                100
+            );
 
-            updateMobileScale();
+            setTimeout(
+                requestResize,
+                400
+            );
 
-        }, 500);
+            setTimeout(
+                requestResize,
+                800
+            );
+        }
+    );
 
-    });
+    // =========================================================
+    // VisualViewport
+    // =========================================================
 
-    // -------------------------------------------------------------------------
-    // Visual Viewport
-    // -------------------------------------------------------------------------
+    if (
+        window.visualViewport
+    ) {
 
-    if (window.visualViewport) {
-
-        window.visualViewport.addEventListener("resize", function() {
-
-            refreshScale();
-
-        });
-
+        window.visualViewport.addEventListener(
+            "resize",
+            requestResize
+        );
     }
 
-    // -------------------------------------------------------------------------
-    // 頁面載入完成
-    // -------------------------------------------------------------------------
+    // =========================================================
+    // RPG Maker MZ 啟動後再次調整
+    // =========================================================
 
-    window.addEventListener("load", function() {
+    const waitForCanvas =
+        setInterval(
+            function() {
 
-        refreshScale();
+                const canvas =
+                    getGameCanvas();
 
-    });
+                if (canvas) {
+
+                    resizeGame();
+
+                    clearInterval(
+                        waitForCanvas
+                    );
+                }
+
+            },
+            100
+        );
+
+    // 最多等待 10 秒
+    setTimeout(
+        function() {
+
+            clearInterval(
+                waitForCanvas
+            );
+
+        },
+        10000
+    );
 
 })();
