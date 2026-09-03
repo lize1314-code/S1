@@ -25,7 +25,7 @@ null,
 {"id":23,"expanded":false,"name":"遺跡內部1","order":23,"parentId":22,"scrollX":656.7272727272727,"scrollY":646.909090909091,"quick":false},
 {"id":24,"expanded":false,"name":"港口","order":24,"parentId":13,"scrollX":656.7272727272727,"scrollY":535.6363636363636,"quick":false},
 {"id":25,"expanded":false,"name":"酒吧","order":25,"parentId":24,"scrollX":656.7272727272727,"scrollY":535.6363636363636,"quick":false},
-{"id":26,"expanded":true,"name":"晨曦森林","order":26,"parentId":13,"scrollX":832,"scrollY":1280,"quick":false},
+{"id":26,"expanded":true,"name":"晨曦森林","order":26,"parentId":13,"scrollX":831.2727272727273,"scrollY":1279.6363636363637,"quick":false},
 {"id":27,"expanded":false,"name":"獵人小屋","order":27,"parentId":26,"scrollX":656.7272727272727,"scrollY":535.6363636363636,"quick":false},
 {"id":28,"expanded":false,"name":"開場","order":28,"parentId":0,"scrollX":0,"scrollY":0,"quick":false}
 ]
