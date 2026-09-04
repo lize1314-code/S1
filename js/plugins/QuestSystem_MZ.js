@@ -1,11 +1,11 @@
 /*:
  * @target MZ
- * @plugindesc v1.4.1 任務系統：任務列表、追蹤、擊殺/收集計數、自動開關、任務/小地圖並排
+ * @plugindesc v1.4.2 任務系統：任務列表、追蹤、擊殺/收集計數、自動開關、任務/小地圖並排
  * @author ChatGPT
  *
  * @help
  * ============================================================================
- * QuestSystem_MZ v1.4.1
+ * QuestSystem_MZ v1.4.2
  * ============================================================================
  *
  * 功能：
@@ -23,6 +23,29 @@
  * 12. 任務追蹤視窗
  * 13. 與 MiniMap_MZ 自動並排
  * 14. 電腦 / 手機畫面自動調整
+ *
+ * ============================================================================
+ *
+ * 任務ID：
+ *
+ * 001 = 森林的異變
+ * 002 = 追查影蝕碎片
+ * 003 = 其他任務
+ *
+ * ============================================================================
+ *
+ * 擊殺敵人：
+ *
+ * 在敵人備註加入：
+ *
+ * <QuestEnemy:1>
+ *
+ * 例如：
+ *
+ * 任務001
+ * type   = kill
+ * target = 1
+ * amount = 5
  *
  * ============================================================================
  *
@@ -87,6 +110,11 @@
  * @type file
  * @dir audio/se/
  * @default Applause1
+ *
+ * @param Quest Battle Switch
+ * @text 任務戰鬥開關
+ * @type switch
+ * @default 11
  *
  * @command OpenQuestScene
  * @text 開啟任務介面
@@ -214,58 +242,35 @@
     const PLUGIN_NAME = "QuestSystem_MZ";
     const P = PluginManager.parameters(PLUGIN_NAME);
 
-    const MAX_TRACK =
-        Number(P["Max Track"] || 1);
+    const MAX_TRACK = Number(P["Max Track"] || 1);
+    const WINDOW_WIDTH = Number(P["Window Width"] || 760);
+    const WINDOW_HEIGHT = Number(P["Window Height"] || 520);
 
-    const WINDOW_WIDTH =
-        Number(P["Window Width"] || 760);
+    const TRACKER_WIDTH = Number(P["Tracker Width"] || 360);
+    const TRACKER_HEIGHT = Number(P["Tracker Height"] || 205);
+    const TRACKER_FONT_SIZE = Number(P["Tracker Font Size"] || 18);
 
-    const WINDOW_HEIGHT =
-        Number(P["Window Height"] || 520);
-
-    const TRACKER_WIDTH =
-        Number(P["Tracker Width"] || 360);
-
-    const TRACKER_HEIGHT =
-        Number(P["Tracker Height"] || 205);
-
-    const TRACKER_FONT_SIZE =
-        Number(P["Tracker Font Size"] || 18);
-
-    const TRACKER_X =
-        Number(P["Tracker X"] || 15);
-
-    const TRACKER_Y =
-        Number(P["Tracker Y"] || 15);
+    const TRACKER_X = Number(P["Tracker X"] || 15);
+    const TRACKER_Y = Number(P["Tracker Y"] || 15);
 
     const SHOW_TRACKER =
-        String(
-            P["Show Tracker"] || "true"
-        ) === "true";
+        String(P["Show Tracker"] || "true") === "true";
 
     const COMPLETE_SE =
-        String(
-            P["Complete SE"] ||
-            "Applause1"
-        );
+        String(P["Complete SE"] || "Applause1");
 
+    const QUEST_BATTLE_SWITCH =
+        Number(P["Quest Battle Switch"] || 11);
 
     function normalizeQuestId(id) {
-
-        const value =
-            String(id ?? "").trim();
+        const value = String(id ?? "").trim();
 
         if (/^\d+$/.test(value)) {
-
-            return value.padStart(
-                3,
-                "0"
-            );
+            return value.padStart(3, "0");
         }
 
         return value;
     }
-
 
     function makeQuest(
         id,
@@ -279,218 +284,130 @@
         startSwitch,
         completeSwitch
     ) {
-
         return {
-
-            id:
-                normalizeQuestId(id),
-
-            name:
-                String(name || ""),
-
-            description:
-                String(description || ""),
-
-            objective:
-                String(objective || ""),
-
-            type:
-                String(type || "count"),
-
-            target:
-                String(target || "1"),
-
-            amount:
-                Math.max(
-                    1,
-                    Number(amount || 1)
-                ),
-
-            progress:
-                0,
-
-            category:
-                category || "main",
-
-            status:
-                "active",
-
-            tracked:
-                true,
-
-            startSwitch:
-                Number(startSwitch || 0),
-
-            completeSwitch:
-                Number(completeSwitch || 0)
+            id: normalizeQuestId(id),
+            name: String(name || ""),
+            description: String(description || ""),
+            objective: String(objective || ""),
+            type: String(type || "count"),
+            target: String(target || "1"),
+            amount: Math.max(1, Number(amount || 1)),
+            progress: 0,
+            category: category || "main",
+            status: "active",
+            tracked: true,
+            startSwitch: Number(startSwitch || 0),
+            completeSwitch: Number(completeSwitch || 0)
         };
     }
-
 
     const _Game_System_initialize =
         Game_System.prototype.initialize;
 
+    Game_System.prototype.initialize = function() {
+        _Game_System_initialize.call(this);
+        this.initQuestSystem();
+    };
 
-    Game_System.prototype.initialize =
-        function() {
+    Game_System.prototype.initQuestSystem = function() {
+        if (!this._quests) {
+            this._quests = [];
+        }
 
-            _Game_System_initialize.call(
-                this
-            );
+        const unique = [];
+        const table = {};
 
-            this.initQuestSystem();
-        };
+        for (const quest of this._quests) {
+            if (!quest) continue;
 
+            quest.id = normalizeQuestId(quest.id);
 
-    Game_System.prototype.initQuestSystem =
-        function() {
+            if (!table[quest.id]) {
+                table[quest.id] = quest;
+                unique.push(quest);
+            } else {
+                const old = table[quest.id];
 
-            if (!this._quests) {
+                old.progress = Math.max(
+                    Number(old.progress || 0),
+                    Number(quest.progress || 0)
+                );
 
-                this._quests = [];
-            }
-
-            const unique = [];
-            const table = {};
-
-
-            for (
-                const quest of this._quests
-            ) {
-
-                if (!quest) {
-                    continue;
-                }
-
-                quest.id =
-                    normalizeQuestId(
-                        quest.id
-                    );
-
-
-                if (!table[quest.id]) {
-
-                    table[quest.id] =
-                        quest;
-
-                    unique.push(
-                        quest
-                    );
-
-                } else {
-
-                    const old =
-                        table[quest.id];
-
-
-                    old.progress =
-                        Math.max(
-                            Number(
-                                old.progress ||
-                                0
-                            ),
-
-                            Number(
-                                quest.progress ||
-                                0
-                            )
-                        );
-
-
-                    if (
-                        quest.status ===
-                        "completed"
-                    ) {
-
-                        old.status =
-                            "completed";
-
-                        old.tracked =
-                            false;
-                    }
+                if (quest.status === "completed") {
+                    old.status = "completed";
+                    old.tracked = false;
                 }
             }
+        }
 
+        this._quests = unique;
 
-            this._quests =
-                unique;
+        if (this._questTrackerVisible === undefined) {
+            this._questTrackerVisible = SHOW_TRACKER;
+        }
+    };
 
+    Game_System.prototype.quest = function(id) {
+        this.initQuestSystem();
 
-            if (
-                this._questTrackerVisible ===
-                undefined
-            ) {
+        const questId = normalizeQuestId(id);
 
-                this._questTrackerVisible =
-                    SHOW_TRACKER;
-            }
-        };
+        return this._quests.find(
+            q => q.id === questId
+        );
+    };
 
+    Game_System.prototype.activeQuests = function() {
+        this.initQuestSystem();
 
-    Game_System.prototype.quest =
-        function(id) {
+        return this._quests.filter(
+            q => q.status === "active"
+        );
+    };
 
-            this.initQuestSystem();
+    Game_System.prototype.completedQuests = function() {
+        this.initQuestSystem();
 
+        return this._quests.filter(
+            q => q.status === "completed"
+        );
+    };
 
-            const questId =
-                normalizeQuestId(id);
+    Game_System.prototype.trackedQuests = function() {
+        this.initQuestSystem();
 
+        return this._quests.filter(
+            q =>
+                q.status === "active" &&
+                q.tracked
+        );
+    };
 
-            return this._quests.find(
-                q =>
-                    q.id ===
-                    questId
-            );
-        };
+    Game_System.prototype.startQuest = function(
+        id,
+        name,
+        description,
+        objective,
+        type,
+        target,
+        amount,
+        category,
+        startSwitch,
+        completeSwitch
+    ) {
+        this.initQuestSystem();
 
+        const questId = normalizeQuestId(id);
 
-    Game_System.prototype.activeQuests =
-        function() {
+        const oldQuest = this.quest(questId);
 
-            this.initQuestSystem();
+        if (oldQuest) {
+            this.refreshQuestUI();
+            return oldQuest;
+        }
 
-
-            return this._quests.filter(
-                q =>
-                    q.status ===
-                    "active"
-            );
-        };
-
-
-    Game_System.prototype.completedQuests =
-        function() {
-
-            this.initQuestSystem();
-
-
-            return this._quests.filter(
-                q =>
-                    q.status ===
-                    "completed"
-            );
-        };
-
-
-    Game_System.prototype.trackedQuests =
-        function() {
-
-            this.initQuestSystem();
-
-
-            return this._quests.filter(
-                q =>
-                    q.status ===
-                    "active" &&
-                    q.tracked
-            );
-        };
-
-
-    Game_System.prototype.startQuest =
-        function(
-            id,
+        const quest = makeQuest(
+            questId,
             name,
             description,
             objective,
@@ -500,244 +417,136 @@
             category,
             startSwitch,
             completeSwitch
+        );
+
+        this._quests.push(quest);
+
+        if (
+            quest.startSwitch > 0 &&
+            $gameSwitches
         ) {
-
-            this.initQuestSystem();
-
-
-            const questId =
-                normalizeQuestId(id);
-
-
-            const oldQuest =
-                this.quest(
-                    questId
-                );
-
-
-            if (oldQuest) {
-
-                this.refreshQuestUI();
-
-                return oldQuest;
-            }
-
-
-            const quest =
-                makeQuest(
-                    questId,
-                    name,
-                    description,
-                    objective,
-                    type,
-                    target,
-                    amount,
-                    category,
-                    startSwitch,
-                    completeSwitch
-                );
-
-
-            this._quests.push(
-                quest
+            $gameSwitches.setValue(
+                quest.startSwitch,
+                true
             );
+        }
 
+        this.playQuestNotification(
+            "start",
+            quest
+        );
 
-            if (
-                quest.startSwitch > 0 &&
-                $gameSwitches
-            ) {
+        this.refreshQuestUI();
 
-                $gameSwitches.setValue(
-                    quest.startSwitch,
-                    true
-                );
-            }
-
-
-            this.playQuestNotification(
-                "start",
-                quest
-            );
-
-
-            this.refreshQuestUI();
-
-
-            return quest;
-        };
-
+        return quest;
+    };
 
     Game_System.prototype.addQuestProgress =
-        function(
-            id,
-            amount
-        ) {
+        function(id, amount) {
 
-            const quest =
-                this.quest(id);
+            const quest = this.quest(id);
 
+            if (!quest) return;
 
-            if (!quest) {
+            if (quest.status !== "active") {
                 return;
             }
-
-
-            if (
-                quest.status !==
-                "active"
-            ) {
-
-                return;
-            }
-
 
             quest.progress +=
-                Number(
-                    amount || 1
-                );
-
+                Number(amount || 1);
 
             if (
                 quest.progress >=
                 quest.amount
             ) {
-
                 quest.progress =
                     quest.amount;
-
 
                 this.completeQuest(
                     quest.id
                 );
 
-
                 return;
             }
-
 
             this.refreshQuestUI();
         };
 
-
     Game_System.prototype.completeQuest =
         function(id) {
 
-            const quest =
-                this.quest(id);
+            const quest = this.quest(id);
 
+            if (!quest) return;
 
-            if (!quest) {
+            if (quest.status === "completed") {
                 return;
             }
-
-
-            if (
-                quest.status ===
-                "completed"
-            ) {
-
-                return;
-            }
-
 
             quest.progress =
                 quest.amount;
 
-
             quest.status =
                 "completed";
 
-
             quest.tracked =
                 false;
-
 
             if (
                 quest.completeSwitch > 0 &&
                 $gameSwitches
             ) {
-
                 $gameSwitches.setValue(
                     quest.completeSwitch,
                     true
                 );
             }
 
-
             this.playQuestNotification(
                 "complete",
                 quest
             );
 
-
             this.refreshQuestUI();
         };
-
 
     Game_System.prototype.trackQuest =
         function(id) {
 
-            const quest =
-                this.quest(id);
+            const quest = this.quest(id);
 
+            if (!quest) return;
 
-            if (!quest) {
+            if (quest.status !== "active") {
                 return;
             }
-
-
-            if (
-                quest.status !==
-                "active"
-            ) {
-
-                return;
-            }
-
 
             const tracked =
                 this.trackedQuests();
 
-
             if (
                 !quest.tracked &&
-                tracked.length >=
-                MAX_TRACK
+                tracked.length >= MAX_TRACK
             ) {
-
-                tracked[0].tracked =
-                    false;
+                tracked[0].tracked = false;
             }
 
-
-            quest.tracked =
-                true;
-
+            quest.tracked = true;
 
             this.refreshQuestUI();
         };
-
 
     Game_System.prototype.untrackQuest =
         function(id) {
 
-            const quest =
-                this.quest(id);
+            const quest = this.quest(id);
 
+            if (!quest) return;
 
-            if (!quest) {
-                return;
-            }
-
-
-            quest.tracked =
-                false;
-
+            quest.tracked = false;
 
             this.refreshQuestUI();
         };
-
 
     Game_System.prototype.refreshQuestUI =
         function() {
@@ -745,74 +554,51 @@
             const scene =
                 SceneManager._scene;
 
-
             if (
                 scene &&
                 scene.refreshQuestTracker
             ) {
-
                 scene.refreshQuestTracker();
             }
-
 
             if (
                 scene &&
                 scene.updateTopHudLayout
             ) {
-
                 scene.updateTopHudLayout();
             }
         };
 
-
     Game_System.prototype.playQuestNotification =
-        function(
-            type,
-            quest
-        ) {
+        function(type, quest) {
 
             if (
                 type === "complete" &&
                 COMPLETE_SE
             ) {
-
                 AudioManager.playSe({
-
-                    name:
-                        COMPLETE_SE,
-
-                    volume:
-                        90,
-
-                    pitch:
-                        100,
-
-                    pan:
-                        0
+                    name: COMPLETE_SE,
+                    volume: 90,
+                    pitch: 100,
+                    pan: 0
                 });
             }
 
-
             const scene =
                 SceneManager._scene;
-
 
             if (
                 scene &&
                 scene.showQuestMessage
             ) {
-
                 scene.showQuestMessage(
-
                     type === "complete"
                         ? "任務完成！"
                         : "接受任務",
-
                     quest.name
                 );
             }
         };
-
 
     PluginManager.registerCommand(
         PLUGIN_NAME,
@@ -820,62 +606,27 @@
         args => {
 
             const id =
-                args.questId ||
-                "001";
-
+                args.questId || "001";
 
             const quest =
                 $gameSystem.startQuest(
-
                     id,
-
-                    args.questName ||
-                    "新任務",
-
-                    args.description ||
-                    "",
-
-                    args.objective ||
-                    "",
-
-                    args.type ||
-                    "count",
-
-                    args.target ||
-                    "1",
-
-                    Number(
-                        args.amount ||
-                        1
-                    ),
-
-                    args.category ||
-                    "main",
-
-                    Number(
-                        args.startSwitch ||
-                        0
-                    ),
-
-                    Number(
-                        args.completeSwitch ||
-                        0
-                    )
+                    args.questName || "新任務",
+                    args.description || "",
+                    args.objective || "",
+                    args.type || "count",
+                    args.target || "1",
+                    Number(args.amount || 1),
+                    args.category || "main",
+                    Number(args.startSwitch || 0),
+                    Number(args.completeSwitch || 0)
                 );
 
-
-            if (
-                quest.status ===
-                "active"
-            ) {
-
-                $gameSystem.trackQuest(
-                    id
-                );
+            if (quest.status === "active") {
+                $gameSystem.trackQuest(id);
             }
         }
     );
-
 
     PluginManager.registerCommand(
         PLUGIN_NAME,
@@ -883,17 +634,11 @@
         args => {
 
             $gameSystem.addQuestProgress(
-
                 args.questId,
-
-                Number(
-                    args.amount ||
-                    1
-                )
+                Number(args.amount || 1)
             );
         }
     );
-
 
     PluginManager.registerCommand(
         PLUGIN_NAME,
@@ -906,7 +651,6 @@
         }
     );
 
-
     PluginManager.registerCommand(
         PLUGIN_NAME,
         "TrackQuest",
@@ -917,7 +661,6 @@
             );
         }
     );
-
 
     PluginManager.registerCommand(
         PLUGIN_NAME,
@@ -930,7 +673,6 @@
         }
     );
 
-
     PluginManager.registerCommand(
         PLUGIN_NAME,
         "HideTracker",
@@ -939,11 +681,9 @@
             $gameSystem._questTrackerVisible =
                 false;
 
-
             $gameSystem.refreshQuestUI();
         }
     );
-
 
     PluginManager.registerCommand(
         PLUGIN_NAME,
@@ -953,11 +693,9 @@
             $gameSystem._questTrackerVisible =
                 true;
 
-
             $gameSystem.refreshQuestUI();
         }
     );
-
 
     PluginManager.registerCommand(
         PLUGIN_NAME,
@@ -969,41 +707,22 @@
                     args.questId
                 );
 
+            if (!quest) return;
 
-            if (!quest) {
+            if (quest.type !== "item") {
                 return;
             }
-
-
-            if (
-                quest.type !==
-                "item"
-            ) {
-
-                return;
-            }
-
 
             const itemId =
-                Number(
-                    quest.target
-                );
-
+                Number(quest.target);
 
             const item =
                 $dataItems[itemId];
 
-
-            if (!item) {
-                return;
-            }
-
+            if (!item) return;
 
             const count =
-                $gameParty.numItems(
-                    item
-                );
-
+                $gameParty.numItems(item);
 
             quest.progress =
                 Math.min(
@@ -1011,134 +730,107 @@
                     quest.amount
                 );
 
-
             if (
                 quest.progress >=
                 quest.amount
             ) {
-
                 $gameSystem.completeQuest(
                     quest.id
                 );
-
             } else {
-
                 $gameSystem.refreshQuestUI();
             }
         }
     );
 
+    const _BattleManager_endBattle =
+        BattleManager.endBattle;
 
-    const _BattleManager_processVictory =
-        BattleManager.processVictory;
+    BattleManager.endBattle = function(result) {
 
+        const questBattleEnabled =
+            QUEST_BATTLE_SWITCH > 0 &&
+            $gameSwitches &&
+            $gameSwitches.value(QUEST_BATTLE_SWITCH);
 
-    BattleManager.processVictory =
-        function() {
-
+        if (questBattleEnabled && result === 0) {
             processQuestEnemyKills();
+        }
 
-
-            _BattleManager_processVictory.call(
-                this
+        if (
+            questBattleEnabled &&
+            $gameSwitches
+        ) {
+            $gameSwitches.setValue(
+                QUEST_BATTLE_SWITCH,
+                false
             );
-        };
+        }
 
+        _BattleManager_endBattle.call(
+            this,
+            result
+        );
+    };
 
     function processQuestEnemyKills() {
 
-        if (!$gameSystem) {
+        if (!$gameSystem || !$gameTroop) {
             return;
         }
 
-
         const quests =
-            $gameSystem.activeQuests();
-
+            $gameSystem.activeQuests().filter(
+                quest => quest.type === "kill"
+            );
 
         if (!quests.length) {
             return;
         }
 
+        const enemies =
+            $gameTroop.members();
 
-        for (
-            const enemy of
-            $gameTroop.members()
-        ) {
+        for (const enemy of enemies) {
 
-            if (
-                !enemy ||
-                !enemy.isDead()
-            ) {
-
+            if (!enemy || !enemy.isDead()) {
                 continue;
             }
 
-
             const databaseEnemy =
                 enemy.enemy();
-
 
             if (!databaseEnemy) {
                 continue;
             }
 
-
             const note =
-                databaseEnemy.note ||
-                "";
-
+                databaseEnemy.note || "";
 
             const matches = [];
-
 
             const regex =
                 /<QuestEnemy\s*:\s*([^>]+)>/gi;
 
-
             let match;
 
-
-            while (
-                (match =
-                    regex.exec(note))
-            ) {
-
+            while ((match = regex.exec(note)) !== null) {
                 matches.push(
-                    String(
-                        match[1]
-                    ).trim()
+                    String(match[1]).trim()
                 );
             }
-
 
             if (!matches.length) {
                 continue;
             }
 
-
-            for (
-                const quest of
-                quests
-            ) {
-
-                if (
-                    quest.type !==
-                    "kill"
-                ) {
-
-                    continue;
-                }
-
+            for (const quest of quests) {
 
                 if (
                     matches.includes(
-                        String(
-                            quest.target
-                        )
+                        String(quest.target).trim()
                     )
                 ) {
-
                     $gameSystem.addQuestProgress(
                         quest.id,
                         1
@@ -1148,114 +840,64 @@
         }
     }
 
-
-    // ============================================================
-    // 任務追蹤視窗
-    // ============================================================
-
     class Window_QuestTracker
         extends Window_Base {
 
         initialize(rect) {
 
-            super.initialize(
-                rect
-            );
+            super.initialize(rect);
 
-
-            this.opacity =
-                225;
-
+            this.opacity = 225;
 
             this.refresh();
         }
-
 
         refresh() {
 
             this.contents.clear();
 
-
             if (!$gameSystem) {
-
-                this.visible =
-                    false;
-
+                this.visible = false;
                 return;
             }
-
 
             if (
-                !$gameSystem
-                    ._questTrackerVisible
+                !$gameSystem._questTrackerVisible
             ) {
-
-                this.visible =
-                    false;
-
+                this.visible = false;
                 return;
             }
-
 
             const quests =
-                $gameSystem
-                    .trackedQuests();
-
+                $gameSystem.trackedQuests();
 
             if (!quests.length) {
-
-                this.visible =
-                    false;
-
+                this.visible = false;
                 return;
             }
 
+            this.visible = true;
 
-            this.visible =
-                true;
+            let y = 0;
 
+            let locationName = "未知地圖";
 
-            let y =
-                0;
-
-
-            // ========================================================
-            // ★ 目前角色位置
-            // 放在「任務」文字上面
-            // ========================================================
-
-            let locationName =
-                "未知地圖";
-
-
-            if (
-                $gameMap &&
-                $dataMapInfos
-            ) {
-
-                const mapId =
-                    $gameMap.mapId();
-
-
+            if ($gameMap && $dataMapInfos) {
                 const mapInfo =
-                    $dataMapInfos[mapId];
-
+                    $dataMapInfos[$gameMap.mapId()];
 
                 if (
                     mapInfo &&
                     mapInfo.name
                 ) {
-
                     locationName =
                         mapInfo.name;
                 }
             }
 
-
             this.changeTextColor(
                 ColorManager.systemColor()
             );
-
 
             this.contents.fontSize =
                 Math.max(
@@ -1263,98 +905,54 @@
                     TRACKER_FONT_SIZE - 2
                 );
 
-
             this.drawText(
-
-                "目前位置：" +
-                locationName,
-
+                "目前位置：" + locationName,
                 8,
-
                 y,
-
-                this.contentsWidth() -
-                16,
-
+                this.contentsWidth() - 16,
                 28,
-
                 "left"
             );
 
-
-            y +=
-                32;
-
-
-            // ========================================================
-            // 任務標題
-            // ========================================================
+            y += 32;
 
             this.changeTextColor(
                 ColorManager.systemColor()
             );
 
-
             this.contents.fontSize =
                 TRACKER_FONT_SIZE + 2;
 
-
             this.drawText(
-
                 "📜 任務",
-
                 0,
-
                 y,
-
                 this.contentsWidth(),
-
                 30,
-
                 "left"
             );
 
+            y += 32;
 
-            y +=
-                32;
-
-
-            // ========================================================
-            // 任務內容
-            // ========================================================
-
-            for (
-                const quest of quests
-            ) {
+            for (const quest of quests) {
 
                 this.changeTextColor(
                     ColorManager.normalColor()
                 );
 
-
                 this.contents.fontSize =
                     TRACKER_FONT_SIZE;
 
-
                 this.drawText(
-
                     quest.name,
-
                     0,
-
                     y,
-
                     this.contentsWidth(),
-
                     28,
-
                     "left"
                 );
 
-
-                y +=
-                    28;
-
+                y += 28;
 
                 this.contents.fontSize =
                     Math.max(
@@ -1362,70 +960,42 @@
                         TRACKER_FONT_SIZE - 2
                     );
 
-
                 this.drawText(
-
                     quest.objective,
-
                     8,
-
                     y,
-
-                    this.contentsWidth() -
-                    16,
-
+                    this.contentsWidth() - 16,
                     26,
-
                     "left"
                 );
 
-
-                y +=
-                    26;
-
+                y += 26;
 
                 this.changeTextColor(
                     ColorManager.systemColor()
                 );
 
-
                 this.contents.fontSize =
                     TRACKER_FONT_SIZE;
 
-
                 this.drawText(
-
                     quest.progress +
                     " / " +
                     quest.amount,
-
                     8,
-
                     y,
-
-                    this.contentsWidth() -
-                    16,
-
+                    this.contentsWidth() - 16,
                     28,
-
                     "right"
                 );
 
-
-                y +=
-                    34;
+                y += 34;
             }
         }
     }
 
-
-    // ============================================================
-    // Scene_Map：建立任務追蹤
-    // ============================================================
-
     const _Scene_Map_createAllWindows =
         Scene_Map.prototype.createAllWindows;
-
 
     Scene_Map.prototype.createAllWindows =
         function() {
@@ -1434,123 +1004,84 @@
                 this
             );
 
-
             this.createQuestTracker();
-
 
             this.createQuestMessageWindow();
 
-
             this.updateTopHudLayout();
         };
-
 
     Scene_Map.prototype.createQuestTracker =
         function() {
 
             const rect =
                 new Rectangle(
-
                     TRACKER_X,
-
                     TRACKER_Y,
-
                     TRACKER_WIDTH,
-
                     TRACKER_HEIGHT
                 );
-
 
             this._questTracker =
                 new Window_QuestTracker(
                     rect
                 );
 
-
-            this._questTracker.z =
-                20;
-
+            this._questTracker.z = 20;
 
             this.addWindow(
                 this._questTracker
             );
 
-
             this.updateTopHudLayout();
         };
-
-
-    // ============================================================
-    // 任務 + 小地圖排版
-    // ============================================================
 
     Scene_Map.prototype.updateTopHudLayout =
         function() {
 
-            if (
-                !this._questTracker
-            ) {
-
+            if (!this._questTracker) {
                 return;
             }
-
 
             const screenW =
                 Graphics.boxWidth;
 
-
             const screenH =
                 Graphics.boxHeight;
 
+            const margin = 15;
+            const gap = 15;
 
-            const margin =
-                15;
-
-
-            const gap =
-                15;
-
-
-            const mapDesiredWidth =
-                300;
-
+            const mapDesiredWidth = 300;
 
             const taskDesiredWidth =
                 TRACKER_WIDTH;
-
 
             const available =
                 screenW -
                 margin * 2 -
                 gap;
 
-
             let taskWidth =
                 taskDesiredWidth;
-
 
             let mapWidth =
                 mapDesiredWidth;
 
-
             if (
-                taskWidth +
-                mapWidth >
+                taskWidth + mapWidth >
                 available
             ) {
 
                 taskWidth =
                     Math.floor(
-                        available *
-                        0.52
+                        available * 0.52
                     );
-
 
                 mapWidth =
                     available -
                     taskWidth;
             }
-
 
             taskWidth =
                 Math.max(
@@ -1558,121 +1089,82 @@
                     taskWidth
                 );
 
-
             mapWidth =
                 Math.max(
                     150,
                     mapWidth
                 );
 
-
             this._questTracker.x =
                 margin;
-
 
             this._questTracker.y =
                 TRACKER_Y;
 
-
             this._questTracker.width =
                 taskWidth;
 
-
             this._questTracker.height =
                 Math.min(
-
                     TRACKER_HEIGHT,
-
                     screenH -
                     TRACKER_Y -
                     margin
                 );
 
-
-            if (
-                this._miniMap
-            ) {
+            if (this._miniMap) {
 
                 this._miniMap.x =
                     this._questTracker.x +
                     this._questTracker.width +
                     gap;
 
-
                 this._miniMap.y =
                     this._questTracker.y;
-
 
                 this._miniMap.width =
                     mapWidth;
 
-
                 this._miniMap.height =
                     Math.min(
-
                         this._miniMap.height,
-
                         screenH -
                         this._questTracker.y -
                         margin
                     );
 
-
                 if (
                     this._miniMap.refresh
                 ) {
-
                     this._miniMap.refresh();
                 }
             }
         };
 
-
-    // ============================================================
-    // 更新任務追蹤
-    // ============================================================
-
     Scene_Map.prototype.refreshQuestTracker =
         function() {
 
-            if (
-                this._questTracker
-            ) {
-
+            if (this._questTracker) {
                 this._questTracker.refresh();
             }
-
 
             this.updateTopHudLayout();
         };
 
-
-    // ============================================================
-    // 任務提示
-    // ============================================================
-
     Scene_Map.prototype.showQuestMessage =
-        function(
-            title,
-            name
-        ) {
+        function(title, name) {
 
             if (
                 !this._questMessageWindow
             ) {
-
                 this.createQuestMessageWindow();
             }
 
-
             this._questMessageWindow.showMessage(
-
                 title,
-
                 name
             );
         };
-
 
     Scene_Map.prototype.createQuestMessageWindow =
         function() {
@@ -1683,433 +1175,260 @@
                     Graphics.boxWidth - 40
                 );
 
-
-            const height =
-                120;
-
+            const height = 120;
 
             const x =
-                (
-                    Graphics.boxWidth -
-                    width
-                ) / 2;
+                (Graphics.boxWidth - width) / 2;
 
-
-            const y =
-                70;
-
+            const y = 70;
 
             const rect =
                 new Rectangle(
-
                     x,
-
                     y,
-
                     width,
-
                     height
                 );
-
 
             this._questMessageWindow =
                 new Window_QuestMessage(
                     rect
                 );
 
-
-            this._questMessageWindow.z =
-                50;
-
+            this._questMessageWindow.z = 50;
 
             this.addWindow(
                 this._questMessageWindow
             );
         };
 
-
     class Window_QuestMessage
         extends Window_Base {
 
         initialize(rect) {
 
-            super.initialize(
-                rect
-            );
+            super.initialize(rect);
 
+            this.opacity = 245;
 
-            this.opacity =
-                245;
-
-
-            this._timer =
-                0;
-
+            this._timer = 0;
 
             this.hide();
         }
 
+        showMessage(title, name) {
 
-        showMessage(
-            title,
-            name
-        ) {
+            this._title = title;
+            this._name = name;
 
-            this._title =
-                title;
-
-
-            this._name =
-                name;
-
-
-            this._timer =
-                180;
-
+            this._timer = 180;
 
             this.refresh();
 
-
             this.show();
         }
-
 
         update() {
 
             super.update();
 
-
-            if (
-                !this.visible
-            ) {
-
+            if (!this.visible) {
                 return;
             }
 
-
             this._timer--;
 
-
-            if (
-                this._timer <=
-                0
-            ) {
-
+            if (this._timer <= 0) {
                 this.hide();
             }
         }
-
 
         refresh() {
 
             this.contents.clear();
 
-
             this.changeTextColor(
                 ColorManager.systemColor()
             );
 
-
-            this.contents.fontSize =
-                24;
-
+            this.contents.fontSize = 24;
 
             this.drawText(
-
-                this._title ||
-                "",
-
+                this._title || "",
                 0,
-
                 0,
-
                 this.contentsWidth(),
-
                 36,
-
                 "center"
             );
-
 
             this.changeTextColor(
                 ColorManager.normalColor()
             );
 
-
-            this.contents.fontSize =
-                20;
-
+            this.contents.fontSize = 20;
 
             this.drawText(
-
-                this._name ||
-                "",
-
+                this._name || "",
                 0,
-
                 42,
-
                 this.contentsWidth(),
-
                 32,
-
                 "center"
             );
         }
     }
-
-
-    // ============================================================
-    // 任務列表
-    // ============================================================
 
     class Window_QuestList
         extends Window_Selectable {
 
         initialize(rect) {
 
-            super.initialize(
-                rect
-            );
-
+            super.initialize(rect);
 
             this.refresh();
 
-
             this.activate();
-
 
             this.select(0);
         }
 
-
         maxItems() {
 
             return $gameSystem
-
                 ? $gameSystem._quests.length
-
                 : 0;
         }
-
 
         item(index) {
 
             return $gameSystem
-
                 ? $gameSystem._quests[index]
-
                 : null;
         }
-
 
         drawItem(index) {
 
             const quest =
                 this.item(index);
 
-
-            if (!quest) {
-                return;
-            }
-
+            if (!quest) return;
 
             const rect =
-                this.itemLineRect(
-                    index
-                );
-
+                this.itemLineRect(index);
 
             this.changeTextColor(
-
-                quest.status ===
-                "completed"
-
+                quest.status === "completed"
                     ? ColorManager.textColor(3)
-
                     : ColorManager.normalColor()
             );
 
-
             const prefix =
-                quest.category ===
-                "main"
-
+                quest.category === "main"
                     ? "【主線】"
-
                     : "【支線】";
 
-
             this.drawText(
-
-                prefix +
-                quest.name,
-
+                prefix + quest.name,
                 rect.x,
-
                 rect.y,
-
-                rect.width -
-                100,
-
+                rect.width - 100,
                 rect.height
             );
 
-
             this.drawText(
-
                 quest.progress +
                 "/" +
                 quest.amount,
-
                 rect.x,
-
                 rect.y,
-
                 rect.width,
-
                 rect.height,
-
                 "right"
             );
         }
-
 
         refresh() {
 
             this.contents.clear();
 
-
             this.createContents();
-
 
             this.drawAllItems();
         }
     }
-
-
-    // ============================================================
-    // 任務詳細
-    // ============================================================
 
     class Window_QuestDetail
         extends Window_Base {
 
         initialize(rect) {
 
-            super.initialize(
-                rect
-            );
+            super.initialize(rect);
 
-
-            this._quest =
-                null;
-
+            this._quest = null;
 
             this.refresh();
         }
-
 
         setQuest(quest) {
 
-            if (
-                this._quest ===
-                quest
-            ) {
-
+            if (this._quest === quest) {
                 return;
             }
 
-
-            this._quest =
-                quest;
-
+            this._quest = quest;
 
             this.refresh();
         }
-
 
         refresh() {
 
             this.contents.clear();
 
-
-            if (
-                !this._quest
-            ) {
-
+            if (!this._quest) {
                 return;
             }
 
+            const q = this._quest;
 
-            const q =
-                this._quest;
+            let y = 0;
 
-
-            let y =
-                0;
-
-
-            this.contents.fontSize =
-                26;
-
+            this.contents.fontSize = 26;
 
             this.changeTextColor(
                 ColorManager.systemColor()
             );
 
-
             this.drawText(
-
                 q.name,
-
                 0,
-
                 y,
-
                 this.contentsWidth(),
-
                 40,
-
                 "center"
             );
 
+            y += 50;
 
-            y +=
-                50;
-
-
-            this.contents.fontSize =
-                20;
-
+            this.contents.fontSize = 20;
 
             this.changeTextColor(
                 ColorManager.systemColor()
             );
 
-
             this.drawText(
-
                 "任務說明",
-
                 0,
-
                 y,
-
                 this.contentsWidth(),
-
                 32
             );
 
-
-            y +=
-                35;
-
+            y += 35;
 
             this.changeTextColor(
                 ColorManager.normalColor()
             );
-
 
             for (
                 const line of
@@ -2117,157 +1436,96 @@
             ) {
 
                 this.drawText(
-
                     line,
-
                     0,
-
                     y,
-
                     this.contentsWidth(),
-
                     30
                 );
 
-
-                y +=
-                    30;
+                y += 30;
             }
 
-
-            y +=
-                15;
-
+            y += 15;
 
             this.changeTextColor(
                 ColorManager.systemColor()
             );
 
-
             this.drawText(
-
                 "任務目標",
-
                 0,
-
                 y,
-
                 this.contentsWidth(),
-
                 32
             );
 
-
-            y +=
-                35;
-
+            y += 35;
 
             this.changeTextColor(
                 ColorManager.normalColor()
             );
 
-
             this.drawText(
-
                 q.objective,
-
                 10,
-
                 y,
-
-                this.contentsWidth() -
-                20,
-
+                this.contentsWidth() - 20,
                 32
             );
 
-
-            y +=
-                40;
-
+            y += 40;
 
             this.changeTextColor(
                 ColorManager.systemColor()
             );
 
-
             this.drawText(
-
                 "進度",
-
                 0,
-
                 y,
-
                 this.contentsWidth(),
-
                 32
             );
 
-
-            y +=
-                35;
-
+            y += 35;
 
             this.changeTextColor(
                 ColorManager.normalColor()
             );
 
-
             this.drawText(
-
                 q.progress +
                 " / " +
                 q.amount,
-
                 0,
-
                 y,
-
                 this.contentsWidth(),
-
                 40,
-
                 "center"
             );
 
-
-            y +=
-                55;
-
+            y += 55;
 
             if (
-                q.status ===
-                "completed"
+                q.status === "completed"
             ) {
 
                 this.changeTextColor(
                     ColorManager.textColor(3)
                 );
 
-
                 this.drawText(
-
                     "✓ 任務完成",
-
                     0,
-
                     y,
-
                     this.contentsWidth(),
-
                     40,
-
                     "center"
                 );
             }
         }
     }
-
-
-    // ============================================================
-    // 任務 Scene
-    // ============================================================
 
     class Scene_Quest
         extends Scene_MenuBase {
@@ -2276,163 +1534,105 @@
 
             super.create();
 
-
             this.createQuestWindows();
         }
-
 
         createQuestWindows() {
 
             const width =
                 Math.min(
-
                     WINDOW_WIDTH,
-
-                    Graphics.boxWidth -
-                    40
+                    Graphics.boxWidth - 40
                 );
-
 
             const height =
                 Math.min(
-
                     WINDOW_HEIGHT,
-
-                    Graphics.boxHeight -
-                    40
+                    Graphics.boxHeight - 40
                 );
-
 
             const x =
-                (
-                    Graphics.boxWidth -
-                    width
-                ) / 2;
-
+                (Graphics.boxWidth - width) / 2;
 
             const y =
-                (
-                    Graphics.boxHeight -
-                    height
-                ) / 2;
-
+                (Graphics.boxHeight - height) / 2;
 
             const listWidth =
-                Math.floor(
-                    width *
-                    0.38
-                );
-
+                Math.floor(width * 0.38);
 
             const detailWidth =
-                width -
-                listWidth;
-
+                width - listWidth;
 
             this._questList =
                 new Window_QuestList(
-
                     new Rectangle(
-
                         x,
-
                         y,
-
                         listWidth,
-
                         height
                     )
                 );
-
 
             this._questDetail =
                 new Window_QuestDetail(
-
                     new Rectangle(
-
-                        x +
-                        listWidth,
-
+                        x + listWidth,
                         y,
-
                         detailWidth,
-
                         height
                     )
                 );
-
 
             this.addWindow(
                 this._questList
             );
 
-
             this.addWindow(
                 this._questDetail
             );
 
-
             this._questList.setHandler(
-
                 "cancel",
-
-                this.popScene.bind(
-                    this
-                )
+                this.popScene.bind(this)
             );
-
 
             this._questList.setHandler(
-
                 "ok",
-
-                this.onQuestOk.bind(
-                    this
-                )
+                this.onQuestOk.bind(this)
             );
-
 
             this.updateQuestDetail();
         }
-
 
         update() {
 
             super.update();
 
-
             this.updateQuestDetail();
         }
-
 
         updateQuestDetail() {
 
             const quest =
                 this._questList.item(
-
                     this._questList.index()
                 );
-
 
             this._questDetail.setQuest(
                 quest
             );
         }
 
-
         onQuestOk() {
 
             const quest =
                 this._questList.item(
-
                     this._questList.index()
                 );
 
-
             if (
                 quest &&
-                quest.status ===
-                "active"
+                quest.status === "active"
             ) {
 
                 $gameSystem.trackQuest(
@@ -2440,22 +1640,13 @@
                 );
             }
 
-
             this._questList.activate();
         }
     }
 
-
-    // ============================================================
-    // 開啟任務介面
-    // ============================================================
-
     PluginManager.registerCommand(
-
         PLUGIN_NAME,
-
         "OpenQuestScene",
-
         () => {
 
             SceneManager.push(
@@ -2464,76 +1655,23 @@
         }
     );
 
-
-    // ============================================================
-    // 地圖轉移後自動更新目前位置
-    // ============================================================
-
-    const _QuestSystem_Game_Player_performTransfer =
-        Game_Player.prototype.performTransfer;
-
-
-    Game_Player.prototype.performTransfer =
-        function() {
-
-            _QuestSystem_Game_Player_performTransfer.call(
-                this
-            );
-
-
-            setTimeout(
-                () => {
-
-                    const scene =
-                        SceneManager._scene;
-
-
-                    if (
-                        scene &&
-                        scene.refreshQuestTracker
-                    ) {
-
-                        scene.refreshQuestTracker();
-                    }
-
-                },
-                50
-            );
-        };
-
-
-    // ============================================================
-    // 視窗大小改變
-    // ============================================================
-
     window.addEventListener(
-
         "resize",
-
         () => {
 
-            setTimeout(
+            setTimeout(() => {
 
-                () => {
+                const scene =
+                    SceneManager._scene;
 
-                    const scene =
-                        SceneManager._scene;
+                if (
+                    scene instanceof Scene_Map &&
+                    scene.updateTopHudLayout
+                ) {
+                    scene.updateTopHudLayout();
+                }
 
-
-                    if (
-                        scene instanceof
-                            Scene_Map &&
-
-                        scene.updateTopHudLayout
-                    ) {
-
-                        scene.updateTopHudLayout();
-                    }
-
-                },
-
-                100
-            );
+            }, 100);
         }
     );
 
