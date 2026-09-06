@@ -775,11 +775,9 @@
             ) {
 
                 scene.showQuestMessage(
-
                     type === "complete"
                         ? "任務完成！"
                         : "接受任務",
-
                     quest.name
                 );
             }
@@ -946,231 +944,81 @@
     // 插件指令：收集任務進度
     // =========================================================================
 
-    PluginManager.registerCommand(
-        PLUGIN_NAME,
-        "AddItemProgress",
-        args => {
+// =========================================================================
+// 收集物品任務：所有實際取得物品自動同步
+// =========================================================================
 
-            const quest =
-                $gameSystem.quest(
-                    args.questId
-                );
+const _Game_Party_gainItem =
+    Game_Party.prototype.gainItem;
 
-            if (!quest) {
-                return;
-            }
+Game_Party.prototype.gainItem =
+    function(item, amount, includeEquip) {
 
-            if (
-                quest.type !==
-                "item"
-            ) {
-                return;
-            }
+        const beforeCount =
+            item
+                ? this.numItems(item)
+                : 0;
 
-            const itemId =
-                Number(quest.target);
+        // 執行 RPG Maker MZ 原本的取得物品功能
+        _Game_Party_gainItem.call(
+            this,
+            item,
+            amount,
+            includeEquip
+        );
 
-            const item =
-                $dataItems[itemId];
-
-            if (!item) {
-                return;
-            }
-
-            const count =
-                $gameParty.numItems(
-                    item
-                );
-
-            quest.progress =
-                Math.min(
-                    count,
-                    quest.amount
-                );
-
-            if (
-                quest.progress >=
-                quest.amount
-            ) {
-
-                $gameSystem.completeQuest(
-                    quest.id
-                );
-
-            } else {
-
-                $gameSystem.refreshQuestUI();
-            }
-        }
-    );
-
-    // =========================================================================
-    // ★ 新功能
-    // 戰鬥獎勵前記錄收集物品數量
-    // =========================================================================
-
-    function captureQuestItemCounts() {
-
-        const result = {};
-
+        // 沒有物品、不是增加物品、不存在遊戲系統
         if (
-            !$gameSystem ||
-            !$gameParty
+            !item ||
+            Number(amount || 0) <= 0 ||
+            !$gameSystem
         ) {
-
-            return result;
-        }
-
-        const quests =
-            $gameSystem.activeQuests();
-
-        for (
-            const quest of quests
-        ) {
-
-            if (
-                !quest ||
-                quest.type !==
-                "item"
-            ) {
-
-                continue;
-            }
-
-            const itemId =
-                Number(quest.target);
-
-            if (
-                !itemId ||
-                !$dataItems[itemId]
-            ) {
-
-                continue;
-            }
-
-            result[quest.id] = {
-
-                itemId:
-                    itemId,
-
-                count:
-                    $gameParty.numItems(
-                        $dataItems[itemId]
-                    )
-            };
-        }
-
-        return result;
-    }
-
-    // =========================================================================
-    // ★ 新功能
-    // 戰鬥獎勵發放後檢查實際新增的物品
-    // =========================================================================
-
-    function processQuestItemDrops(
-        beforeCounts
-    ) {
-
-        if (
-            !$gameSystem ||
-            !$gameParty
-        ) {
-
             return;
         }
 
-        for (
-            const questId in beforeCounts
-        ) {
+        // 實際取得後的數量
+        const afterCount =
+            this.numItems(item);
 
-            const record =
-                beforeCounts[questId];
+        // 只計算真正增加到背包的數量
+        const gained =
+            Math.max(
+                0,
+                afterCount - beforeCount
+            );
 
-            const quest =
-                $gameSystem.quest(
-                    questId
-                );
+        if (gained <= 0) {
+            return;
+        }
+
+        // 找出所有進行中的收集物品任務
+        const quests =
+            $gameSystem.activeQuests();
+
+        for (const quest of quests) {
 
             if (
                 !quest ||
-                quest.status !==
-                "active"
+                quest.type !== "item"
             ) {
-
                 continue;
             }
 
-            const item =
-                $dataItems[
-                    record.itemId
-                ];
-
-            if (!item) {
+            // 任務目標物品 ID
+            if (
+                Number(quest.target) !==
+                Number(item.id)
+            ) {
                 continue;
             }
 
-            const afterCount =
-                $gameParty.numItems(
-                    item
-                );
-
-            const gained =
-                afterCount -
-                record.count;
-
-            if (gained > 0) {
-
-                $gameSystem.addQuestProgress(
-
-                    quest.id,
-
-                    gained
-                );
-            }
+            // 自動增加任務進度
+            $gameSystem.addQuestProgress(
+                quest.id,
+                gained
+            );
         }
-    }
-
-    // =========================================================================
-    // ★ 攔截 BattleManager.gainRewards
-    // =========================================================================
-    //
-    // RPG Maker MZ 的戰鬥掉落是在 gainRewards()
-    // 裡面正式加入玩家背包。
-    //
-    // 所以必須：
-    //
-    // 戰鬥獎勵前
-    // ↓
-    // 記錄蘑菇孢子數量
-    // ↓
-    // 原本的 gainRewards()
-    // ↓
-    // 蘑菇孢子正式加入背包
-    // ↓
-    // 再檢查增加多少
-    // ↓
-    // QuestSystem 002 + 實際增加數量
-    //
-    // =========================================================================
-
-    const _BattleManager_gainRewards =
-        BattleManager.gainRewards;
-
-    BattleManager.gainRewards =
-        function() {
-
-            const beforeCounts =
-                captureQuestItemCounts();
-
-            _BattleManager_gainRewards.call(
-                this
-            );
-
-            processQuestItemDrops(
-                beforeCounts
-            );
-        };
+    };
 
     // =========================================================================
     // 戰鬥勝利：計算擊殺任務
@@ -1622,9 +1470,7 @@
 
             this._questTracker.height =
                 Math.min(
-
                     TRACKER_HEIGHT,
-
                     screenH -
                     TRACKER_Y -
                     margin
@@ -1647,9 +1493,7 @@
 
                 this._miniMap.height =
                     Math.min(
-
                         this._miniMap.height,
-
                         screenH -
                         this._questTracker.y -
                         margin
@@ -1703,6 +1547,10 @@
                 name
             );
         };
+
+    // =========================================================================
+    // 建立任務提示視窗
+    // =========================================================================
 
     Scene_Map.prototype.createQuestMessageWindow =
         function() {
@@ -1817,7 +1665,6 @@
                 24;
 
             this.drawText(
-
                 this._title ||
                     "",
 
@@ -1839,7 +1686,6 @@
                 20;
 
             this.drawText(
-
                 this._name ||
                     "",
 
@@ -1853,9 +1699,7 @@
                 "center"
             );
         }
-    }
-
-    // =========================================================================
+    }    // =========================================================================
     // 任務列表
     // =========================================================================
 
@@ -1863,194 +1707,182 @@
         extends Window_Selectable {
 
         initialize(rect) {
-
             super.initialize(rect);
-
             this.refresh();
-
             this.activate();
-
-            this.select(0);
+            this.select(this.maxItems() > 0 ? 0 : -1);
         }
 
         maxItems() {
-
             return $gameSystem
                 ? $gameSystem._quests.length
                 : 0;
         }
 
         item(index) {
-
             return $gameSystem
                 ? $gameSystem._quests[index]
                 : null;
         }
 
         drawItem(index) {
+            const quest = this.item(index);
+            if (!quest) return;
 
-            const quest =
-                this.item(index);
+            const rect = this.itemLineRect(index);
 
-            if (!quest) {
-                return;
-            }
-
-            const rect =
-                this.itemLineRect(
-                    index
-                );
-
-            this.changeTextColor(
-
-                quest.status ===
-                    "completed"
-
-                    ? ColorManager.textColor(3)
-
-                    : ColorManager.normalColor()
-            );
-
+            // -------------------------------------------------------------
+            // 任務分類標籤：主線藍色、支線黃色
+            // -------------------------------------------------------------
             const prefix =
-                quest.category ===
-                "main"
-
+                quest.category === "main"
                     ? "【主線】"
-
                     : "【支線】";
 
+            const prefixColor =
+                quest.category === "main"
+                    ? ColorManager.textColor(1)
+                    : ColorManager.textColor(6);
+
+            const progressText =
+                quest.progress + "/" + quest.amount;
+
+            // 右側固定保留進度欄位
+            const progressWidth = 90;
+            const nameWidth = Math.max(
+                0,
+                rect.width - progressWidth
+            );
+
+            // -------------------------------------------------------------
+            // 顯示主線 / 支線標籤
+            // -------------------------------------------------------------
+            this.changeTextColor(prefixColor);
+
+            const prefixWidth =
+                this.textWidth(prefix);
+
             this.drawText(
-
-                prefix +
-                    quest.name,
-
+                prefix,
                 rect.x,
-
                 rect.y,
-
-                rect.width -
-                    100,
-
+                prefixWidth + 4,
                 rect.height
             );
 
+            // -------------------------------------------------------------
+            // 顯示任務名稱
+            // -------------------------------------------------------------
+            this.changeTextColor(
+                quest.status === "completed"
+                    ? ColorManager.textColor(3)
+                    : ColorManager.normalColor()
+            );
+
             this.drawText(
-
-                quest.progress +
-                    "/" +
-                    quest.amount,
-
-                rect.x,
-
+                quest.name,
+                rect.x + prefixWidth + 4,
                 rect.y,
+                Math.max(
+                    0,
+                    nameWidth - prefixWidth - 4
+                ),
+                rect.height
+            );
 
-                rect.width,
+            // -------------------------------------------------------------
+            // 顯示進度，與任務名稱同一行並靠右
+            // -------------------------------------------------------------
+            this.changeTextColor(
+                ColorManager.normalColor()
+            );
 
+            this.drawText(
+                progressText,
+                rect.x + nameWidth,
+                rect.y,
+                progressWidth,
                 rect.height,
-
                 "right"
             );
         }
 
         refresh() {
-
             this.contents.clear();
-
             this.createContents();
-
             this.drawAllItems();
         }
     }
+
 
     // =========================================================================
     // 任務詳細
     // =========================================================================
 
     class Window_QuestDetail
-        extends Window_Base {
+        extends Window_Selectable {
 
         initialize(rect) {
-
             super.initialize(rect);
 
-            this._quest =
-                null;
+            this._quest = null;
 
+            this.select(-1);
+            this.deactivate();
             this.refresh();
         }
 
         setQuest(quest) {
+            if (this._quest === quest) return;
 
-            if (
-                this._quest ===
-                quest
-            ) {
-
-                return;
-            }
-
-            this._quest =
-                quest;
-
+            this._quest = quest;
             this.refresh();
         }
 
-        refresh() {
+        maxItems() {
+            return 0;
+        }
 
+        refresh() {
             this.contents.clear();
 
-            if (
-                !this._quest
-            ) {
+            if (!this._quest) return;
 
-                return;
-            }
+            const q = this._quest;
+            let y = 0;
 
-            const q =
-                this._quest;
-
-            let y =
-                0;
-
-            this.contents.fontSize =
-                26;
-
+            // -------------------------------------------------------------
+            // 任務名稱
+            // -------------------------------------------------------------
+            this.contents.fontSize = 26;
             this.changeTextColor(
                 ColorManager.systemColor()
             );
 
             this.drawText(
-
                 q.name,
-
                 0,
                 y,
-
                 this.contentsWidth(),
-
                 40,
-
                 "center"
             );
 
             y += 50;
 
-            this.contents.fontSize =
-                20;
-
+            // -------------------------------------------------------------
+            // 任務說明
+            // -------------------------------------------------------------
+            this.contents.fontSize = 20;
             this.changeTextColor(
                 ColorManager.systemColor()
             );
 
             this.drawText(
-
                 "任務說明",
-
                 0,
                 y,
-
                 this.contentsWidth(),
-
                 32
             );
 
@@ -2060,43 +1892,31 @@
                 ColorManager.normalColor()
             );
 
-            for (
-                const line of
-                q.description.split(
-                    "\n"
-                )
-            ) {
-
+            for (const line of q.description.split("\n")) {
                 this.drawText(
-
                     line,
-
                     0,
                     y,
-
                     this.contentsWidth(),
-
                     30
                 );
-
                 y += 30;
             }
 
             y += 15;
 
+            // -------------------------------------------------------------
+            // 任務目標
+            // -------------------------------------------------------------
             this.changeTextColor(
                 ColorManager.systemColor()
             );
 
             this.drawText(
-
                 "任務目標",
-
                 0,
                 y,
-
                 this.contentsWidth(),
-
                 32
             );
 
@@ -2107,33 +1927,27 @@
             );
 
             this.drawText(
-
                 q.objective,
-
                 10,
                 y,
-
-                this.contentsWidth() -
-                    20,
-
+                this.contentsWidth() - 20,
                 32
             );
 
             y += 40;
 
+            // -------------------------------------------------------------
+            // 進度
+            // -------------------------------------------------------------
             this.changeTextColor(
                 ColorManager.systemColor()
             );
 
             this.drawText(
-
                 "進度",
-
                 0,
                 y,
-
                 this.contentsWidth(),
-
                 32
             );
 
@@ -2144,50 +1958,35 @@
             );
 
             this.drawText(
-
-                q.progress +
-                    " / " +
-                    q.amount,
-
+                q.progress + " / " + q.amount,
                 0,
                 y,
-
                 this.contentsWidth(),
-
                 40,
-
                 "center"
             );
 
             y += 55;
 
-            if (
-                q.status ===
-                "completed"
-            ) {
-
+            // -------------------------------------------------------------
+            // 完成標記
+            // -------------------------------------------------------------
+            if (q.status === "completed") {
                 this.changeTextColor(
                     ColorManager.textColor(3)
                 );
 
                 this.drawText(
-
                     "✓ 任務完成",
-
                     0,
                     y,
-
                     this.contentsWidth(),
-
                     40,
-
                     "center"
                 );
             }
         }
-    }
-
-    // =========================================================================
+    }    // =========================================================================
     // 任務 Scene
     // =========================================================================
 
@@ -2195,153 +1994,111 @@
         extends Scene_MenuBase {
 
         create() {
-
             super.create();
-
             this.createQuestWindows();
         }
 
         createQuestWindows() {
+            const width = Math.min(
+                WINDOW_WIDTH,
+                Graphics.boxWidth - 40
+            );
 
-            const width =
-                Math.min(
-
-                    WINDOW_WIDTH,
-
-                    Graphics.boxWidth -
-                    40
-                );
-
-            const height =
-                Math.min(
-
-                    WINDOW_HEIGHT,
-
-                    Graphics.boxHeight -
-                    40
-                );
+            const height = Math.min(
+                WINDOW_HEIGHT,
+                Graphics.boxHeight - 40
+            );
 
             const x =
-                (
-                    Graphics.boxWidth -
-                    width
-                ) / 2;
+                (Graphics.boxWidth - width) / 2;
 
             const y =
-                (
-                    Graphics.boxHeight -
-                    height
-                ) / 2;
+                (Graphics.boxHeight - height) / 2;
 
-            const listWidth =
-                Math.floor(
-                    width *
-                    0.38
-                );
-
-            const detailWidth =
-                width -
-                listWidth;
+            // -------------------------------------------------------------
+            // 任務列表與詳細頁使用同一個位置
+            // 先顯示列表，按決定後切換到詳細頁
+            // -------------------------------------------------------------
+            const rect = new Rectangle(
+                x,
+                y,
+                width,
+                height
+            );
 
             this._questList =
-                new Window_QuestList(
-
-                    new Rectangle(
-
-                        x,
-                        y,
-                        listWidth,
-                        height
-                    )
-                );
+                new Window_QuestList(rect);
 
             this._questDetail =
-                new Window_QuestDetail(
+                new Window_QuestDetail(rect);
 
-                    new Rectangle(
+            this.addWindow(this._questList);
+            this.addWindow(this._questDetail);
 
-                        x +
-                        listWidth,
-
-                        y,
-
-                        detailWidth,
-
-                        height
-                    )
-                );
-
-            this.addWindow(
-                this._questList
-            );
-
-            this.addWindow(
-                this._questDetail
-            );
-
+            // -------------------------------------------------------------
+            // 任務列表控制
+            // -------------------------------------------------------------
             this._questList.setHandler(
-
                 "cancel",
-
-                this.popScene.bind(
-                    this
-                )
+                this.popScene.bind(this)
             );
 
             this._questList.setHandler(
-
                 "ok",
-
-                this.onQuestOk.bind(
-                    this
-                )
+                this.onQuestOk.bind(this)
             );
 
-            this.updateQuestDetail();
+            // -------------------------------------------------------------
+            // 詳細頁控制
+            // -------------------------------------------------------------
+            this._questDetail.setHandler(
+                "cancel",
+                this.onQuestDetailCancel.bind(this)
+            );
+
+            // 初始狀態：顯示任務列表
+            this._questList.show();
+            this._questList.activate();
+
+            this._questDetail.hide();
+            this._questDetail.deactivate();
         }
 
         update() {
-
             super.update();
-
-            this.updateQuestDetail();
-        }
-
-        updateQuestDetail() {
-
-            const quest =
-                this._questList.item(
-
-                    this._questList.index()
-                );
-
-            this._questDetail.setQuest(
-                quest
-            );
         }
 
         onQuestOk() {
-
             const quest =
                 this._questList.item(
-
                     this._questList.index()
                 );
 
-            if (
-                quest &&
-                quest.status ===
-                "active"
-            ) {
-
-                $gameSystem.trackQuest(
-                    quest.id
-                );
+            if (!quest) {
+                this._questList.activate();
+                return;
             }
 
+            // 切換到任務詳細頁
+            this._questDetail.setQuest(quest);
+
+            this._questList.hide();
+            this._questList.deactivate();
+
+            this._questDetail.show();
+            this._questDetail.activate();
+        }
+
+        onQuestDetailCancel() {
+            // ESC / 取消：從詳細頁返回任務列表
+            this._questDetail.hide();
+            this._questDetail.deactivate();
+
+            this._questList.show();
             this._questList.activate();
         }
     }
+
 
     // =========================================================================
     // 開啟任務介面
@@ -2351,12 +2108,12 @@
         PLUGIN_NAME,
         "OpenQuestScene",
         () => {
-
             SceneManager.push(
                 Scene_Quest
             );
         }
     );
+
 
     // =========================================================================
     // 視窗大小改變
