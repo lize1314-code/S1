@@ -1,6 +1,7 @@
 # ============================================================
 # RPG Maker MZ Quest ID Scanner
-# Version 19.3 Stable
+# Version 20.0
+# 支援 QuestSystem_MZ_Core / QuestSystem_MZ
 # PowerShell 5.1
 # ============================================================
 
@@ -23,12 +24,12 @@ $Utf8 = New-Object System.Text.UTF8Encoding($false)
 # CHECK DATA
 # ============================================================
 
-if (-not (Test-Path -LiteralPath $DataPath)) {
+if (-not (Test-Path $DataPath)) {
 
     Write-Host ""
-    Write-Host "ERROR: data folder not found." -ForegroundColor Red
+    Write-Host "找不到 data 資料夾！" -ForegroundColor Red
     Write-Host ""
-    Write-Host $DataPath
+    Write-Host "請把本程式放在 RPG Maker MZ 遊戲專案根目錄。"
     Write-Host ""
 
     Read-Host "Press Enter to exit"
@@ -41,7 +42,6 @@ if (-not (Test-Path -LiteralPath $DataPath)) {
 
 $QuestList = New-Object System.Collections.ArrayList
 $RelatedList = New-Object System.Collections.ArrayList
-$MapNames = @{}
 
 # ============================================================
 # SAFE STRING
@@ -62,7 +62,7 @@ function Safe-String {
 # ============================================================
 
 function Html-Encode {
-    param($Value)
+    param([string]$Value)
 
     if ($null -eq $Value) {
         return ""
@@ -89,10 +89,10 @@ function Get-Prop {
 
     try {
 
-        $P = $Object.PSObject.Properties[$Name]
+        $Property = $Object.PSObject.Properties[$Name]
 
-        if ($null -ne $P) {
-            return Safe-String $P.Value
+        if ($null -ne $Property) {
+            return Safe-String $Property.Value
         }
 
     }
@@ -103,7 +103,7 @@ function Get-Prop {
 }
 
 # ============================================================
-# PARSE JSON STRING
+# PARSE JSON OBJECT
 # ============================================================
 
 function Parse-JsonObject {
@@ -113,24 +113,14 @@ function Parse-JsonObject {
         return $null
     }
 
-    if ($Value -is [System.Management.Automation.PSCustomObject]) {
-        return $Value
-    }
-
     $Text = Safe-String $Value
 
     if ([string]::IsNullOrWhiteSpace($Text)) {
         return $null
     }
 
-    $Text = $Text.Trim()
-
-    if (-not $Text.StartsWith("{")) {
-        return $null
-    }
-
     try {
-        return ($Text | ConvertFrom-Json)
+        return $Text | ConvertFrom-Json
     }
     catch {
         return $null
@@ -150,12 +140,29 @@ function Get-PluginArguments {
 
     $Parameters = @($Command.parameters)
 
-    foreach ($P in $Parameters) {
+    # MZ Plugin Command:
+    #
+    # parameters[0] = Plugin Name
+    # parameters[1] = Command Name
+    # parameters[2] = JSON Arguments
+    #
 
-        $Object = Parse-JsonObject $P
+    if ($Parameters.Count -ge 3) {
 
-        if ($null -ne $Object) {
-            return $Object
+        $Arguments = Parse-JsonObject $Parameters[2]
+
+        if ($null -ne $Arguments) {
+            return $Arguments
+        }
+    }
+
+    # 相容某些舊格式
+    foreach ($Parameter in $Parameters) {
+
+        $Arguments = Parse-JsonObject $Parameter
+
+        if ($null -ne $Arguments) {
+            return $Arguments
         }
     }
 
@@ -191,131 +198,112 @@ function Get-QuestCommand {
         return $null
     }
 
-    $PluginName = Safe-String $Parameters[0]
-    $CommandName = Safe-String $Parameters[1]
+    $PluginName =
+        Safe-String $Parameters[0]
 
-    if (
-        -not $PluginName.Equals(
+    $CommandName =
+        Safe-String $Parameters[1]
+
+    # ========================================================
+    # ★ 重要修正
+    #
+    # 現在遊戲使用：
+    # QuestSystem_MZ_Core
+    #
+    # 同時保留舊版：
+    # QuestSystem_MZ
+    # ========================================================
+
+    $IsQuestPlugin =
+
+        $PluginName.Equals(
+            "QuestSystem_MZ_Core",
+            [StringComparison]::OrdinalIgnoreCase
+        ) -or
+
+        $PluginName.Equals(
             "QuestSystem_MZ",
             [StringComparison]::OrdinalIgnoreCase
         )
-    ) {
+
+    if (-not $IsQuestPlugin) {
         return $null
     }
 
-    $Arguments = Get-PluginArguments $Command
+    $Arguments =
+        Get-PluginArguments $Command
 
     return [PSCustomObject]@{
-        PluginName = $PluginName
-        CommandName = $CommandName
-        Arguments = $Arguments
-        Parameters = $Parameters
+
+        PluginName =
+            $PluginName
+
+        CommandName =
+            $CommandName
+
+        Arguments =
+            $Arguments
+
+        Parameters =
+            $Parameters
     }
 }
 
 # ============================================================
-# GET ID FROM ARGUMENTS
+# NORMALIZE QUEST ID
+# ============================================================
+
+function Normalize-QuestId {
+    param($Value)
+
+    $Text =
+        Safe-String $Value
+
+    if ([string]::IsNullOrWhiteSpace($Text)) {
+        return ""
+    }
+
+    $Text =
+        $Text.Trim()
+
+    # 取得開頭數字
+    if ($Text -match '^\d+') {
+
+        try {
+
+            return (
+                [int]$Matches[0]
+            ).ToString("000")
+
+        }
+        catch {
+        }
+    }
+
+    return $Text
+}
+
+# ============================================================
+# GET QUEST ID
 # ============================================================
 
 function Get-IdFromArguments {
-    param(
-        $Arguments,
-        $Parameters
-    )
+    param($Arguments)
 
-    $Value = ""
-
-    if ($null -ne $Arguments) {
-
-        $Value = Get-Prop $Arguments "questId"
-
-        if ([string]::IsNullOrWhiteSpace($Value)) {
-            $Value = Get-Prop $Arguments "id"
-        }
-    }
-
-    if (
-        [string]::IsNullOrWhiteSpace($Value)
-    ) {
-
+    if ($null -eq $Arguments) {
         return ""
     }
 
-    $Text = $Value.Trim()
+    $Value =
+        Get-Prop $Arguments "questId"
 
-    $Digits = ""
+    if ([string]::IsNullOrWhiteSpace($Value)) {
 
-    foreach ($C in $Text.ToCharArray()) {
-
-        if ([char]::IsDigit($C)) {
-            $Digits = $Digits + $C
-        }
-        else {
-            break
-        }
+        $Value =
+            Get-Prop $Arguments "id"
     }
 
-    if ($Digits.Length -eq 0) {
-        return ""
-    }
-
-    try {
-
-        return ([int]$Digits).ToString("000")
-
-    }
-    catch {
-
-        return ""
-    }
-}
-
-# ============================================================
-# MAP INFOS
-# ============================================================
-
-$MapInfosPath = Join-Path $DataPath "MapInfos.json"
-
-if (Test-Path -LiteralPath $MapInfosPath) {
-
-    try {
-
-        $MapInfoText = Get-Content `
-            -LiteralPath $MapInfosPath `
-            -Raw `
-            -Encoding UTF8
-
-        $MapInfoData = $MapInfoText | ConvertFrom-Json
-
-        foreach ($Info in @($MapInfoData)) {
-
-            if ($null -eq $Info) {
-                continue
-            }
-
-            try {
-
-                $MapId = [int]$Info.id
-                $Name = Safe-String $Info.name
-
-                if ($MapId -gt 0) {
-
-                    $MapNames[$MapId] = $Name
-                }
-
-            }
-            catch {
-            }
-        }
-
-    }
-    catch {
-
-        Write-Host ""
-        Write-Host "WARNING: MapInfos.json could not be read." `
-            -ForegroundColor Yellow
-        Write-Host ""
-    }
+    return Normalize-QuestId $Value
 }
 
 # ============================================================
@@ -325,54 +313,67 @@ if (Test-Path -LiteralPath $MapInfosPath) {
 function Get-MapName {
     param([int]$MapId)
 
-    if ($MapNames.ContainsKey($MapId)) {
+    $MapInfoPath =
+        Join-Path `
+            $DataPath `
+            "MapInfos.json"
 
-        $Name = Safe-String $MapNames[$MapId]
-
-        if (
-            -not [string]::IsNullOrWhiteSpace($Name)
-        ) {
-            return $Name
-        }
+    if (-not (Test-Path $MapInfoPath)) {
+        return ""
     }
 
-    return (
-        "Map " +
-        $MapId.ToString("000")
-    )
+    try {
+
+        $Text =
+            Get-Content `
+                -LiteralPath $MapInfoPath `
+                -Raw `
+                -Encoding UTF8
+
+        $Infos =
+            $Text | ConvertFrom-Json
+
+        $Info =
+            $Infos[$MapId]
+
+        if ($null -ne $Info) {
+
+            return (
+                Safe-String $Info.name
+            )
+        }
+    }
+    catch {
+    }
+
+    return ""
 }
 
 # ============================================================
 # GET MAP FILES
 # ============================================================
 
-$MapFiles = @(
+$MapFiles =
     Get-ChildItem `
         -LiteralPath $DataPath `
         -Filter "Map*.json" `
         -File |
     Where-Object {
-        $_.BaseName -match "^Map[0-9]+$"
+        $_.Name -match '^Map\d{3}\.json$'
     } |
     Sort-Object Name
-)
-
-# ============================================================
-# HEADER
-# ============================================================
 
 Write-Host ""
 Write-Host "=============================================="
-Write-Host " RPG Maker MZ Quest ID Scanner"
-Write-Host " Version 19.3 Stable"
+Write-Host " RPG Maker MZ Quest ID Scanner v20.0"
 Write-Host "=============================================="
 Write-Host ""
 
-Write-Host (
-    "Map files found: " +
-    $MapFiles.Count
-)
+Write-Host "資料夾："
+Write-Host $DataPath
+Write-Host ""
 
+Write-Host "開始掃描 Map..."
 Write-Host ""
 
 # ============================================================
@@ -381,16 +382,17 @@ Write-Host ""
 
 foreach ($MapFile in $MapFiles) {
 
-    $MapIdText = $MapFile.BaseName.Substring(3)
+    $MapIdText =
+        $MapFile.BaseName.Substring(3)
 
-    $MapId = 0
+    try {
 
-    if (
-        -not [int]::TryParse(
-            $MapIdText,
-            [ref]$MapId
-        )
-    ) {
+        $MapId =
+            [int]$MapIdText
+
+    }
+    catch {
+
         continue
     }
 
@@ -398,7 +400,8 @@ foreach ($MapFile in $MapFiles) {
         continue
     }
 
-    $MapName = Get-MapName $MapId
+    $MapName =
+        Get-MapName $MapId
 
     Write-Host "----------------------------------------------"
 
@@ -409,24 +412,26 @@ foreach ($MapFile in $MapFiles) {
         $MapName
     )
 
-    # --------------------------------------------------------
-    # READ MAP JSON
-    # --------------------------------------------------------
+    # ========================================================
+    # READ MAP
+    # ========================================================
 
     try {
 
-        $MapText = Get-Content `
-            -LiteralPath $MapFile.FullName `
-            -Raw `
-            -Encoding UTF8
+        $MapText =
+            Get-Content `
+                -LiteralPath $MapFile.FullName `
+                -Raw `
+                -Encoding UTF8
 
-        $MapData = $MapText | ConvertFrom-Json
+        $MapData =
+            $MapText | ConvertFrom-Json
 
     }
     catch {
 
         Write-Host ""
-        Write-Host "JSON ERROR:" -ForegroundColor Red
+        Write-Host "JSON ERROR" -ForegroundColor Red
         Write-Host $MapFile.FullName -ForegroundColor Red
         Write-Host $_.Exception.Message -ForegroundColor Red
         Write-Host ""
@@ -434,17 +439,13 @@ foreach ($MapFile in $MapFiles) {
         continue
     }
 
-    $StartCount = 0
-
     if ($null -eq $MapData.events) {
-
-        Write-Host "  No events."
         continue
     }
 
-    # --------------------------------------------------------
+    # ========================================================
     # EVENTS
-    # --------------------------------------------------------
+    # ========================================================
 
     foreach ($Event in @($MapData.events)) {
 
@@ -453,9 +454,13 @@ foreach ($MapFile in $MapFiles) {
         }
 
         try {
-            $EventId = [int]$Event.id
+
+            $EventId =
+                [int]$Event.id
+
         }
         catch {
+
             continue
         }
 
@@ -463,13 +468,14 @@ foreach ($MapFile in $MapFiles) {
             continue
         }
 
-        $EventName = Safe-String $Event.name
+        $EventName =
+            Safe-String $Event.name
 
         $PageNumber = 0
 
-        # ----------------------------------------------------
+        # ====================================================
         # PAGES
-        # ----------------------------------------------------
+        # ====================================================
 
         foreach ($Page in @($Event.pages)) {
 
@@ -481,32 +487,31 @@ foreach ($MapFile in $MapFiles) {
 
             $CommandIndex = -1
 
-            # ------------------------------------------------
-            # COMMANDS
-            # ------------------------------------------------
+            # =================================================
+            # EVENT COMMANDS
+            # =================================================
 
             foreach ($Command in @($Page.list)) {
 
                 $CommandIndex++
 
-                $QuestCommand = Get-QuestCommand $Command
+                $QuestCommand =
+                    Get-QuestCommand $Command
 
                 if ($null -eq $QuestCommand) {
                     continue
                 }
 
                 $CommandName =
-                    Safe-String $QuestCommand.CommandName
+                    Safe-String `
+                        $QuestCommand.CommandName
 
                 $Arguments =
                     $QuestCommand.Arguments
 
-                $Parameters =
-                    $QuestCommand.Parameters
-
-                # ==================================================
+                # =================================================
                 # START QUEST
-                # ==================================================
+                # =================================================
 
                 if (
                     $CommandName.Equals(
@@ -517,77 +522,116 @@ foreach ($MapFile in $MapFiles) {
 
                     $QuestId =
                         Get-IdFromArguments `
-                            $Arguments `
-                            $Parameters
+                            $Arguments
 
                     $QuestName =
-                        Get-Prop $Arguments "questName"
+                        Get-Prop `
+                            $Arguments `
+                            "questName"
 
                     $Description =
-                        Get-Prop $Arguments "description"
+                        Get-Prop `
+                            $Arguments `
+                            "description"
 
                     $Objective =
-                        Get-Prop $Arguments "objective"
+                        Get-Prop `
+                            $Arguments `
+                            "objective"
 
                     $Type =
-                        Get-Prop $Arguments "type"
+                        Get-Prop `
+                            $Arguments `
+                            "type"
 
                     $Target =
-                        Get-Prop $Arguments "target"
+                        Get-Prop `
+                            $Arguments `
+                            "target"
 
                     $Amount =
-                        Get-Prop $Arguments "amount"
+                        Get-Prop `
+                            $Arguments `
+                            "amount"
 
                     $Category =
-                        Get-Prop $Arguments "category"
+                        Get-Prop `
+                            $Arguments `
+                            "category"
 
                     $StartSwitch =
-                        Get-Prop $Arguments "startSwitch"
+                        Get-Prop `
+                            $Arguments `
+                            "startSwitch"
 
                     $CompleteSwitch =
-                        Get-Prop $Arguments "completeSwitch"
+                        Get-Prop `
+                            $Arguments `
+                            "completeSwitch"
 
-                    $Record = [PSCustomObject]@{
+                    # =================================================
+                    # 建立任務資料
+                    # =================================================
 
-                        ID = $QuestId
+                    $Record =
+                        [PSCustomObject]@{
 
-                        QuestName = $QuestName
+                            ID =
+                                $QuestId
 
-                        Description = $Description
+                            QuestName =
+                                $QuestName
 
-                        Objective = $Objective
+                            Description =
+                                $Description
 
-                        Type = $Type
+                            Objective =
+                                $Objective
 
-                        Target = $Target
+                            Type =
+                                $Type
 
-                        Amount = $Amount
+                            Target =
+                                $Target
 
-                        Category = $Category
+                            Amount =
+                                $Amount
 
-                        StartSwitch = $StartSwitch
+                            Category =
+                                $Category
 
-                        CompleteSwitch = $CompleteSwitch
+                            StartSwitch =
+                                $StartSwitch
 
-                        MapID = $MapId
+                            CompleteSwitch =
+                                $CompleteSwitch
 
-                        MapName = $MapName
+                            MapID =
+                                $MapId
 
-                        EventID = $EventId
+                            MapName =
+                                $MapName
 
-                        EventName = $EventName
+                            EventID =
+                                $EventId
 
-                        Page = $PageNumber
+                            EventName =
+                                $EventName
 
-                        CommandIndex = $CommandIndex
-                    }
+                            Page =
+                                $PageNumber
 
-                    [void]$QuestList.Add($Record)
+                            CommandIndex =
+                                $CommandIndex
+                        }
 
-                    $StartCount++
+                    [void]
+                        $QuestList.Add(
+                            $Record
+                        )
 
                     Write-Host (
-                        "  StartQuest -> ID " +
+                        "  [找到任務] ID " +
                         $QuestId +
                         " | " +
                         $QuestName +
@@ -596,68 +640,64 @@ foreach ($MapFile in $MapFiles) {
                         " | Page " +
                         $PageNumber
                     ) -ForegroundColor Green
+
+                    continue
                 }
 
-                # ==================================================
+                # =================================================
                 # RELATED COMMANDS
-                # ==================================================
+                # =================================================
 
                 $IsRelated = $false
 
-                if (
-                    $CommandName.Equals(
-                        "AddQuestProgress",
-                        [StringComparison]::OrdinalIgnoreCase
-                    )
-                ) {
-                    $IsRelated = $true
-                }
+                switch -Regex ($CommandName) {
 
-                if (
-                    $CommandName.Equals(
-                        "AddItemProgress",
-                        [StringComparison]::OrdinalIgnoreCase
-                    )
-                ) {
-                    $IsRelated = $true
-                }
+                    '^AddQuestProgress$' {
+                        $IsRelated = $true
+                        break
+                    }
 
-                if (
-                    $CommandName.Equals(
-                        "CompleteQuest",
-                        [StringComparison]::OrdinalIgnoreCase
-                    )
-                ) {
-                    $IsRelated = $true
-                }
+                    '^AddItemProgress$' {
+                        $IsRelated = $true
+                        break
+                    }
 
-                if (
-                    $CommandName.Equals(
-                        "TrackQuest",
-                        [StringComparison]::OrdinalIgnoreCase
-                    )
-                ) {
-                    $IsRelated = $true
-                }
+                    '^CompleteQuest$' {
+                        $IsRelated = $true
+                        break
+                    }
 
-                if (
-                    $CommandName.Equals(
-                        "UntrackQuest",
-                        [StringComparison]::OrdinalIgnoreCase
-                    )
-                ) {
-                    $IsRelated = $true
+                    '^TrackQuest$' {
+                        $IsRelated = $true
+                        break
+                    }
+
+                    '^UntrackQuest$' {
+                        $IsRelated = $true
+                        break
+                    }
+
+                    '^HideTracker$' {
+                        $IsRelated = $true
+                        break
+                    }
+
+                    '^ShowTracker$' {
+                        $IsRelated = $true
+                        break
+                    }
                 }
 
                 if ($IsRelated) {
 
                     $RelatedId =
                         Get-IdFromArguments `
-                            $Arguments `
-                            $Parameters
+                            $Arguments
 
                     $RelatedAmount =
-                        Get-Prop $Arguments "amount"
+                        Get-Prop `
+                            $Arguments `
+                            "amount"
 
                     if (
                         [string]::IsNullOrWhiteSpace(
@@ -666,110 +706,105 @@ foreach ($MapFile in $MapFiles) {
                     ) {
 
                         $RelatedAmount =
-                            Get-Prop $Arguments "value"
+                            Get-Prop `
+                                $Arguments `
+                                "value"
                     }
 
                     $RelatedRecord =
                         [PSCustomObject]@{
 
-                            ID = $RelatedId
+                            ID =
+                                $RelatedId
 
-                            Command = $CommandName
+                            Command =
+                                $CommandName
 
-                            Amount = $RelatedAmount
+                            Amount =
+                                $RelatedAmount
 
-                            MapID = $MapId
+                            MapID =
+                                $MapId
 
-                            MapName = $MapName
+                            MapName =
+                                $MapName
 
-                            EventID = $EventId
+                            EventID =
+                                $EventId
 
-                            EventName = $EventName
+                            EventName =
+                                $EventName
 
-                            Page = $PageNumber
+                            Page =
+                                $PageNumber
 
-                            CommandIndex = $CommandIndex
+                            CommandIndex =
+                                $CommandIndex
                         }
 
-                    [void]$RelatedList.Add(
-                        $RelatedRecord
-                    )
+                    [void]
+                        $RelatedList.Add(
+                            $RelatedRecord
+                        )
                 }
             }
         }
     }
-
-    Write-Host (
-        "  StartQuest found: " +
-        $StartCount
-    )
 }
 
 # ============================================================
-# SORT
-#
-# IMPORTANT:
-# Do NOT use:
-# Sort-Object @{N=...}
-#
-# IDs are already 001,002,003...
-# Therefore normal ID sorting is enough.
+# SORT QUEST
 # ============================================================
 
-$SortedQuests = @(
-    $QuestList |
-    Sort-Object ID, MapID, EventID, Page
-)
+$SortedQuests =
+    @(
+        $QuestList |
+        Sort-Object `
+            @{Expression={
+                try {
+                    [int]$_.ID
+                }
+                catch {
+                    999999
+                }
+            }},
+            MapID,
+            EventID,
+            Page
+    )
 
-$SortedRelated = @(
-    $RelatedList |
-    Sort-Object ID, MapID, EventID, Page
-)
+$SortedRelated =
+    @(
+        $RelatedList |
+        Sort-Object `
+            @{Expression={
+                try {
+                    [int]$_.ID
+                }
+                catch {
+                    999999
+                }
+            }},
+            MapID,
+            EventID,
+            Page
+    )
 
 # ============================================================
-# DUPLICATES
+# MAX ID
 # ============================================================
 
-$DuplicateGroups = @(
-    $SortedQuests |
-    Where-Object {
-        -not [string]::IsNullOrWhiteSpace($_.ID)
-    } |
-    Group-Object ID |
-    Where-Object {
-        $_.Count -gt 1
-    } |
-    Sort-Object Name
-)
-
-# ============================================================
-# USED IDS
-# ============================================================
-
-$UsedIds = @{}
 $MaxId = 0
 
 foreach ($Quest in $SortedQuests) {
 
-    if (
-        [string]::IsNullOrWhiteSpace(
-            $Quest.ID
-        )
-    ) {
-        continue
-    }
-
     try {
 
-        $Number = [int]$Quest.ID
+        $Number =
+            [int]$Quest.ID
 
-        if ($Number -gt 0) {
-
-            $UsedIds[$Number] = $true
-
-            if ($Number -gt $MaxId) {
-                $MaxId = $Number
-            }
+        if ($Number -gt $MaxId) {
+            $MaxId = $Number
         }
 
     }
@@ -778,10 +813,57 @@ foreach ($Quest in $SortedQuests) {
 }
 
 # ============================================================
+# USED IDS
+# ============================================================
+
+$UsedIds =
+    @{}
+
+foreach ($Quest in $SortedQuests) {
+
+    if (
+        -not [string]::IsNullOrWhiteSpace(
+            $Quest.ID
+        )
+    ) {
+
+        if (
+            -not $UsedIds.ContainsKey(
+                $Quest.ID
+            )
+        ) {
+
+            $UsedIds[$Quest.ID] = 0
+        }
+
+        $UsedIds[$Quest.ID]++
+    }
+}
+
+# ============================================================
+# DUPLICATES
+# ============================================================
+
+$DuplicateGroups =
+    @(
+        $SortedQuests |
+        Where-Object {
+            -not [string]::IsNullOrWhiteSpace(
+                $_.ID
+            )
+        } |
+        Group-Object ID |
+        Where-Object {
+            $_.Count -gt 1
+        }
+    )
+
+# ============================================================
 # UNUSED IDS
 # ============================================================
 
-$UnusedIds = New-Object System.Collections.ArrayList
+$UnusedIds =
+    New-Object System.Collections.ArrayList
 
 if ($MaxId -gt 0) {
 
@@ -791,13 +873,19 @@ if ($MaxId -gt 0) {
         $i++
     ) {
 
+        $Id =
+            $i.ToString("000")
+
         if (
-            -not $UsedIds.ContainsKey($i)
+            -not $UsedIds.ContainsKey(
+                $Id
+            )
         ) {
 
-            [void]$UnusedIds.Add(
-                $i.ToString("000")
-            )
+            [void]
+                $UnusedIds.Add(
+                    $Id
+                )
         }
     }
 }
@@ -829,77 +917,102 @@ Write-Host (
 Write-Host ""
 
 # ============================================================
-# TXT
+# TXT REPORT
 # ============================================================
 
-$TxtLines = New-Object System.Collections.ArrayList
+$TxtLines =
+    New-Object System.Collections.ArrayList
 
-[void]$TxtLines.Add(
+[void]
+$TxtLines.Add(
     "RPG Maker MZ Quest ID Report"
 )
 
-[void]$TxtLines.Add(
-    "QuestIDScanner_MZ v19.3 Stable"
+[void]
+$TxtLines.Add(
+    "QuestIDScanner_MZ v20.0"
 )
 
-[void]$TxtLines.Add(
+[void]
+$TxtLines.Add(
+    "Plugin: QuestSystem_MZ_Core / QuestSystem_MZ"
+)
+
+[void]
+$TxtLines.Add(
     "=============================================="
 )
 
-[void]$TxtLines.Add(
+[void]
+$TxtLines.Add(
     "Quest count: " +
     $SortedQuests.Count
 )
 
-[void]$TxtLines.Add(
+[void]
+$TxtLines.Add(
     "Duplicate IDs: " +
     $DuplicateGroups.Count
 )
 
-[void]$TxtLines.Add(
+[void]
+$TxtLines.Add(
     "Unused IDs: " +
     $UnusedIds.Count
 )
 
-[void]$TxtLines.Add("")
+[void]
+$TxtLines.Add("")
 
-[void]$TxtLines.Add(
+[void]
+$TxtLines.Add(
     "QUEST LIST"
 )
 
-[void]$TxtLines.Add(
+[void]
+$TxtLines.Add(
     "=============================================="
 )
 
 foreach ($Quest in $SortedQuests) {
 
-    [void]$TxtLines.Add(
-        (
-            "ID " +
-            $Quest.ID +
-            " | " +
-            $Quest.QuestName +
-            " | Map " +
-            $Quest.MapID.ToString("000") +
-            " " +
-            $Quest.MapName +
-            " | Event " +
-            $Quest.EventID +
-            " " +
-            $Quest.EventName +
-            " | Page " +
-            $Quest.Page
-        )
+    [void]
+    $TxtLines.Add(
+
+        "ID " +
+        $Quest.ID +
+        " | " +
+        $Quest.QuestName +
+        " | Map " +
+        $Quest.MapID.ToString("000") +
+        " " +
+        $Quest.MapName +
+        " | Event " +
+        $Quest.EventID +
+        " " +
+        $Quest.EventName +
+        " | Page " +
+        $Quest.Page
     )
 }
 
-[void]$TxtLines.Add("")
-[void]$TxtLines.Add("DUPLICATE IDS")
-[void]$TxtLines.Add("==============================================")
+[void]
+$TxtLines.Add("")
+
+[void]
+$TxtLines.Add(
+    "DUPLICATE IDS"
+)
+
+[void]
+$TxtLines.Add(
+    "=============================================="
+)
 
 if ($DuplicateGroups.Count -eq 0) {
 
-    [void]$TxtLines.Add(
+    [void]
+    $TxtLines.Add(
         "None"
     )
 
@@ -908,49 +1021,59 @@ else {
 
     foreach ($Group in $DuplicateGroups) {
 
-        [void]$TxtLines.Add(
-            (
-                "ID " +
-                $Group.Name +
-                " duplicated " +
-                $Group.Count +
-                " times"
-            )
+        [void]
+        $TxtLines.Add(
+            "ID " +
+            $Group.Name +
+            " duplicated " +
+            $Group.Count +
+            " times"
         )
 
         foreach ($Quest in $Group.Group) {
 
-            [void]$TxtLines.Add(
-                (
-                    "Map " +
-                    $Quest.MapID.ToString("000") +
-                    " " +
-                    $Quest.MapName +
-                    " / Event " +
-                    $Quest.EventID +
-                    " " +
-                    $Quest.EventName +
-                    " / Page " +
-                    $Quest.Page
-                )
+            [void]
+            $TxtLines.Add(
+
+                "Map " +
+                $Quest.MapID.ToString("000") +
+                " " +
+                $Quest.MapName +
+                " / Event " +
+                $Quest.EventID +
+                " " +
+                $Quest.EventName +
+                " / Page " +
+                $Quest.Page
             )
         }
     }
 }
 
-[void]$TxtLines.Add("")
-[void]$TxtLines.Add("UNUSED IDS")
-[void]$TxtLines.Add("==============================================")
+[void]
+$TxtLines.Add("")
+
+[void]
+$TxtLines.Add(
+    "UNUSED IDS"
+)
+
+[void]
+$TxtLines.Add(
+    "=============================================="
+)
 
 if ($UnusedIds.Count -eq 0) {
 
-    [void]$TxtLines.Add("None")
+    [void]
+    $TxtLines.Add("None")
 
 }
 else {
 
-    [void]$TxtLines.Add(
-        ($UnusedIds -join ", ")
+    [void]
+    $TxtLines.Add(
+        $UnusedIds -join ", "
     )
 }
 
@@ -960,79 +1083,91 @@ else {
     $Utf8
 )
 
-Write-Host ""
-Write-Host "TXT created:" -ForegroundColor Green
-Write-Host $TxtPath
-
 # ============================================================
-# CSV
+# CSV REPORT
 # ============================================================
 
 $CsvRows = @()
 
 foreach ($Quest in $SortedQuests) {
 
-    $CsvRows += [PSCustomObject]@{
+    $CsvRows +=
+        [PSCustomObject]@{
 
-        ID = $Quest.ID
+            ID =
+                $Quest.ID
 
-        QuestName = $Quest.QuestName
+            QuestName =
+                $Quest.QuestName
 
-        Description = $Quest.Description
+            Description =
+                $Quest.Description
 
-        Objective = $Quest.Objective
+            Objective =
+                $Quest.Objective
 
-        Type = $Quest.Type
+            Type =
+                $Quest.Type
 
-        Target = $Quest.Target
+            Target =
+                $Quest.Target
 
-        Amount = $Quest.Amount
+            Amount =
+                $Quest.Amount
 
-        Category = $Quest.Category
+            Category =
+                $Quest.Category
 
-        StartSwitch = $Quest.StartSwitch
+            StartSwitch =
+                $Quest.StartSwitch
 
-        CompleteSwitch = $Quest.CompleteSwitch
+            CompleteSwitch =
+                $Quest.CompleteSwitch
 
-        Map = $Quest.MapName
+            MapID =
+                $Quest.MapID.ToString("000")
 
-        MapID = $Quest.MapID.ToString("000")
+            Map =
+                $Quest.MapName
 
-        Event = $Quest.EventName
+            EventID =
+                $Quest.EventID
 
-        EventID = $Quest.EventID
+            Event =
+                $Quest.EventName
 
-        Page = $Quest.Page
-    }
+            Page =
+                $Quest.Page
+        }
 }
 
 if ($CsvRows.Count -gt 0) {
 
     $CsvRows |
-    Export-Csv `
-        -LiteralPath $CsvPath `
-        -NoTypeInformation `
-        -Encoding UTF8
+        Export-Csv `
+            -LiteralPath $CsvPath `
+            -NoTypeInformation `
+            -Encoding UTF8
 }
-
-Write-Host ""
-Write-Host "CSV created:" -ForegroundColor Green
-Write-Host $CsvPath
 
 # ============================================================
 # HTML
 # ============================================================
 
-$Html = New-Object System.Collections.ArrayList
+$Html =
+    New-Object System.Collections.ArrayList
 
 function Add-Html {
     param([string]$Text)
 
-    [void]$script:Html.Add($Text)
+    [void]
+        $script:Html.Add(
+            $Text
+        )
 }
 
 # ============================================================
-# HTML HEADER
+# HTML HEAD
 # ============================================================
 
 Add-Html '<!DOCTYPE html>'
@@ -1040,82 +1175,180 @@ Add-Html '<html lang="zh-Hant">'
 Add-Html '<head>'
 Add-Html '<meta charset="UTF-8">'
 Add-Html '<meta name="viewport" content="width=device-width, initial-scale=1">'
-Add-Html '<title>&#20219;&#21209; ID &#25475;&#25551;&#22577;&#21578;</title>'
+Add-Html '<title>RPG Maker MZ 任務掃描報告</title>'
 
 Add-Html '<style>'
 
-Add-Html 'body{font-family:"Microsoft JhengHei",Arial,sans-serif;background:#eef2f4;margin:0;padding:20px;color:#222;}'
+Add-Html '
+body{
+font-family:"Microsoft JhengHei",Arial,sans-serif;
+background:#eef2f4;
+margin:0;
+padding:20px;
+color:#222;
+}
+'
 
-Add-Html '.box{background:#fff;border-radius:10px;padding:20px;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,.08);overflow:auto;}'
+Add-Html '
+.box{
+background:#fff;
+border-radius:10px;
+padding:20px;
+margin-bottom:20px;
+box-shadow:0 2px 8px rgba(0,0,0,.08);
+overflow:auto;
+}
+'
 
-Add-Html 'h1{margin-top:0;}'
+Add-Html '
+h1,h2{
+margin-top:0;
+}
+'
 
-Add-Html 'h2{margin-top:0;}'
+Add-Html '
+.stats{
+display:flex;
+gap:12px;
+flex-wrap:wrap;
+}
+'
 
-Add-Html '.stats{display:flex;gap:12px;flex-wrap:wrap;}'
+Add-Html '
+.stat{
+background:#f3f6f7;
+padding:14px 20px;
+border-radius:8px;
+}
+'
 
-Add-Html '.stat{background:#f3f6f7;padding:14px 20px;border-radius:8px;}'
+Add-Html '
+table{
+width:100%;
+border-collapse:collapse;
+}
+'
 
-Add-Html 'table{width:100%;border-collapse:collapse;}'
+Add-Html '
+th{
+background:#405762;
+color:#fff;
+padding:10px;
+text-align:left;
+}
+'
 
-Add-Html 'th{background:#405762;color:#fff;padding:10px;text-align:left;}'
+Add-Html '
+td{
+padding:10px;
+border-bottom:1px solid #ddd;
+vertical-align:top;
+}
+'
 
-Add-Html 'td{padding:10px;border-bottom:1px solid #ddd;vertical-align:top;}'
+Add-Html '
+.id{
+color:#06c;
+text-decoration:underline;
+cursor:pointer;
+font-weight:bold;
+font-size:17px;
+}
+'
 
-Add-Html '.id{color:#06c;text-decoration:underline;cursor:pointer;font-weight:bold;font-size:17px;}'
+Add-Html '
+.detail{
+display:none;
+background:#f7fafb;
+}
+'
 
-Add-Html '.detail{display:none;background:#f7fafb;}'
+Add-Html '
+.cmd{
+background:#e5f1ff;
+padding:5px 9px;
+border-radius:5px;
+}
+'
 
-Add-Html '.cmd{background:#e5f1ff;padding:5px 9px;border-radius:5px;}'
+Add-Html '
+.dup{
+background:#fff0f0;
+border:1px solid #d99;
+padding:12px;
+border-radius:7px;
+margin:8px 0;
+}
+'
 
-Add-Html '.dup{background:#fff0f0;border:1px solid #d99;padding:12px;border-radius:7px;margin:8px 0;}'
+Add-Html '
+.unused{
+display:inline-block;
+background:#fff0b5;
+padding:5px 9px;
+border-radius:5px;
+margin:3px;
+}
+'
 
-Add-Html '.unused{display:inline-block;background:#fff0b5;padding:5px 9px;border-radius:5px;margin:3px;}'
+Add-Html '
+.ok{
+color:#168348;
+font-weight:bold;
+}
+'
 
-Add-Html '.ok{color:#168348;font-weight:bold;}'
-
-Add-Html '.search{width:100%;padding:11px;box-sizing:border-box;border:1px solid #bbb;border-radius:6px;font-size:16px;}'
+Add-Html '
+.search{
+width:100%;
+padding:11px;
+box-sizing:border-box;
+border:1px solid #bbb;
+border-radius:6px;
+font-size:16px;
+}
+'
 
 Add-Html '</style>'
 
 # ============================================================
-# JAVASCRIPT
+# HTML JAVASCRIPT
 # ============================================================
 
 Add-Html '<script>'
 
-Add-Html 'function toggleDetail(id){'
+Add-Html '
+function toggleDetail(id){
+var row=document.getElementById(id);
+if(!row){return;}
+if(row.style.display==="table-row"){
+row.style.display="none";
+}else{
+row.style.display="table-row";
+}
+}
+'
 
-Add-Html 'var row=document.getElementById(id);'
+Add-Html '
+function searchQuest(){
+var box=document.getElementById("searchBox");
+var q=box.value.toLowerCase();
+var rows=document.getElementsByClassName("questrow");
 
-Add-Html 'if(!row){return;}'
+for(var i=0;i<rows.length;i++){
+var text=rows[i].innerText.toLowerCase();
 
-Add-Html 'if(row.style.display==="table-row"){row.style.display="none";}else{row.style.display="table-row";}'
-
-Add-Html '}'
-
-Add-Html 'function searchQuest(){'
-
-Add-Html 'var box=document.getElementById("searchBox");'
-
-Add-Html 'var q=box.value.toLowerCase();'
-
-Add-Html 'var rows=document.getElementsByClassName("questrow");'
-
-Add-Html 'for(var i=0;i<rows.length;i++){'
-
-Add-Html 'var text=rows[i].innerText.toLowerCase();'
-
-Add-Html 'if(text.indexOf(q)>=0){rows[i].style.display="";}else{rows[i].style.display="none";}'
-
-Add-Html '}'
-
-Add-Html '}'
+if(text.indexOf(q)>=0){
+rows[i].style.display="";
+}else{
+rows[i].style.display="none";
+}
+}
+}
+'
 
 Add-Html '</script>'
-
 Add-Html '</head>'
-
 Add-Html '<body>'
 
 # ============================================================
@@ -1124,32 +1357,34 @@ Add-Html '<body>'
 
 Add-Html '<div class="box">'
 
-Add-Html '<h1>&#82;&#80;&#71; Maker MZ &#20219;&#21209; ID &#25475;&#25551;&#22577;&#21578;</h1>'
+Add-Html '<h1>RPG Maker MZ 任務 ID 掃描報告</h1>'
 
-Add-Html '<p>QuestSystem_MZ &#20219;&#21209;&#25475;&#25551;&#22120; v19.3 Stable</p>'
+Add-Html '<p>QuestIDScanner_MZ v20.0</p>'
+
+Add-Html '<p>支援：QuestSystem_MZ_Core / QuestSystem_MZ</p>'
 
 Add-Html '<div class="stats">'
 
 Add-Html (
-    '<div class="stat">&#20219;&#21209;&#25976;&#37327;&#65306;<b>' +
+    '<div class="stat">任務數量：<b>' +
     $SortedQuests.Count +
     '</b></div>'
 )
 
 Add-Html (
-    '<div class="stat">&#26368;&#22823; ID&#65306;<b>' +
+    '<div class="stat">最大 ID：<b>' +
     $MaxId.ToString("000") +
     '</b></div>'
 )
 
 Add-Html (
-    '<div class="stat">&#37325;&#35079; ID&#65306;<b>' +
+    '<div class="stat">重複 ID：<b>' +
     $DuplicateGroups.Count +
     '</b></div>'
 )
 
 Add-Html (
-    '<div class="stat">&#26410;&#20351;&#29992; ID&#65306;<b>' +
+    '<div class="stat">未使用 ID：<b>' +
     $UnusedIds.Count +
     '</b></div>'
 )
@@ -1163,24 +1398,31 @@ Add-Html '</div>'
 
 Add-Html '<div class="box">'
 
-Add-Html '<h2>&#25628;&#23563;&#20219;&#21209;</h2>'
+Add-Html '<h2>搜尋任務</h2>'
 
-Add-Html '<input id="searchBox" class="search" onkeyup="searchQuest()" placeholder="&#25628;&#23563; ID&#12289;&#20219;&#21209;&#21517;&#31281;&#12289;Map&#12289;Event...">'
+Add-Html '
+<input
+id="searchBox"
+class="search"
+onkeyup="searchQuest()"
+placeholder="搜尋 ID、任務名稱、Map、Event..."
+>
+'
 
 Add-Html '</div>'
 
 # ============================================================
-# UNUSED
+# UNUSED IDS
 # ============================================================
 
 Add-Html '<div class="box">'
 
-Add-Html '<h2>&#26410;&#20351;&#29992;&#20219;&#21209; ID</h2>'
+Add-Html '<h2>未使用任務 ID</h2>'
 
 if ($UnusedIds.Count -eq 0) {
 
     Add-Html (
-        '<div class="ok">&#27809;&#26377;&#26410;&#20351;&#29992; ID&#12290;</div>'
+        '<div class="ok">沒有未使用 ID。</div>'
     )
 
 }
@@ -1204,12 +1446,12 @@ Add-Html '</div>'
 
 Add-Html '<div class="box">'
 
-Add-Html '<h2>&#37325;&#35079;&#20219;&#21209; ID</h2>'
+Add-Html '<h2>重複任務 ID</h2>'
 
 if ($DuplicateGroups.Count -eq 0) {
 
     Add-Html (
-        '<div class="ok">&#27809;&#26377;&#37325;&#35079;&#20219;&#21209; ID&#12290;</div>'
+        '<div class="ok">沒有重複任務 ID。</div>'
     )
 
 }
@@ -1222,25 +1464,35 @@ else {
         Add-Html (
             '<b>ID ' +
             (Html-Encode $Group.Name) +
-            ' &#37325;&#35079; ' +
+            ' 重複 ' +
             $Group.Count +
-            ' &#27425;</b>'
+            ' 次</b>'
         )
 
         foreach ($Quest in $Group.Group) {
 
             Add-Html (
+
                 '<div style="margin-top:6px;">' +
+
                 'Map ' +
                 $Quest.MapID.ToString("000") +
                 ' / ' +
+
                 (Html-Encode $Quest.MapName) +
+
                 ' / Event ' +
+
                 $Quest.EventID +
+
                 ' / ' +
+
                 (Html-Encode $Quest.EventName) +
+
                 ' / Page ' +
+
                 $Quest.Page +
+
                 '</div>'
             )
         }
@@ -1257,9 +1509,9 @@ Add-Html '</div>'
 
 Add-Html '<div class="box">'
 
-Add-Html '<h2>&#20219;&#21209;&#28165;&#21934;</h2>'
+Add-Html '<h2>任務清單</h2>'
 
-Add-Html '<p>&#40670;&#25802;&#34253;&#33394; ID &#21487;&#23637;&#38283;&#35443;&#32048;&#36039;&#26009;&#12290;</p>'
+Add-Html '<p>點擊藍色 ID 可展開任務詳細資料。</p>'
 
 Add-Html '<table>'
 
@@ -1268,17 +1520,12 @@ Add-Html '<thead>'
 Add-Html '<tr>'
 
 Add-Html '<th>ID</th>'
-
-Add-Html '<th>&#20219;&#21209;&#21517;&#31281;</th>'
-
+Add-Html '<th>任務名稱</th>'
 Add-Html '<th>Map</th>'
-
 Add-Html '<th>Event</th>'
-
 Add-Html '<th>Page</th>'
-
 Add-Html '<th>Type</th>'
-
+Add-Html '<th>Target</th>'
 Add-Html '<th>Amount</th>'
 
 Add-Html '</tr>'
@@ -1295,21 +1542,26 @@ foreach ($Quest in $SortedQuests) {
 
     $DetailId =
         "detail_" +
-        $DetailIndex.ToString()
+        $DetailIndex
 
-    # --------------------------------------------------------
+    # ========================================================
     # MAIN ROW
-    # --------------------------------------------------------
+    # ========================================================
 
     Add-Html '<tr class="questrow">'
 
     Add-Html (
+
         '<td>' +
+
         '<span class="id" onclick="toggleDetail(''' +
         $DetailId +
-        ''')"">' +
+        ''')">' +
+
         (Html-Encode $Quest.ID) +
+
         '</span>' +
+
         '</td>'
     )
 
@@ -1320,22 +1572,34 @@ foreach ($Quest in $SortedQuests) {
     )
 
     Add-Html (
+
         '<td>' +
+
         'Map ' +
         $Quest.MapID.ToString("000") +
+
         '<br><small>' +
+
         (Html-Encode $Quest.MapName) +
+
         '</small>' +
+
         '</td>'
     )
 
     Add-Html (
+
         '<td>' +
+
         'Event ' +
         $Quest.EventID +
+
         '<br><small>' +
+
         (Html-Encode $Quest.EventName) +
+
         '</small>' +
+
         '</td>'
     )
 
@@ -1353,86 +1617,93 @@ foreach ($Quest in $SortedQuests) {
 
     Add-Html (
         '<td>' +
+        (Html-Encode $Quest.Target) +
+        '</td>'
+    )
+
+    Add-Html (
+        '<td>' +
         (Html-Encode $Quest.Amount) +
         '</td>'
     )
 
     Add-Html '</tr>'
 
-    # --------------------------------------------------------
+    # ========================================================
     # DETAIL
-    # --------------------------------------------------------
+    # ========================================================
 
     Add-Html (
+
         '<tr id="' +
         (Html-Encode $DetailId) +
         '" class="detail">'
     )
 
-    Add-Html '<td colspan="7">'
+    Add-Html '<td colspan="8">'
 
     Add-Html (
-        '<b>&#20219;&#21209; ID&#65306;</b>' +
+        '<b>任務 ID：</b>' +
         (Html-Encode $Quest.ID) +
         '<br>'
     )
 
     Add-Html (
-        '<b>&#20219;&#21209;&#21517;&#31281;&#65306;</b>' +
+        '<b>任務名稱：</b>' +
         (Html-Encode $Quest.QuestName) +
         '<br>'
     )
 
     Add-Html (
-        '<b>&#20219;&#21209;&#25551;&#36848;&#65306;</b>' +
+        '<b>任務描述：</b>' +
         (Html-Encode $Quest.Description) +
         '<br>'
     )
 
     Add-Html (
-        '<b>&#20219;&#21209;&#30446;&#27161;&#65306;</b>' +
+        '<b>任務目標：</b>' +
         (Html-Encode $Quest.Objective) +
         '<br>'
     )
 
     Add-Html (
-        '<b>Type&#65306;</b>' +
+        '<b>Type：</b>' +
         (Html-Encode $Quest.Type) +
         '<br>'
     )
 
     Add-Html (
-        '<b>Target&#65306;</b>' +
+        '<b>Target：</b>' +
         (Html-Encode $Quest.Target) +
         '<br>'
     )
 
     Add-Html (
-        '<b>Amount&#65306;</b>' +
+        '<b>Amount：</b>' +
         (Html-Encode $Quest.Amount) +
         '<br>'
     )
 
     Add-Html (
-        '<b>Category&#65306;</b>' +
+        '<b>Category：</b>' +
         (Html-Encode $Quest.Category) +
         '<br>'
     )
 
     Add-Html (
-        '<b>Start Switch&#65306;</b>' +
+        '<b>開始任務開關：</b>' +
         (Html-Encode $Quest.StartSwitch) +
         '<br>'
     )
 
     Add-Html (
-        '<b>Complete Switch&#65306;</b>' +
+        '<b>完成任務開關：</b>' +
         (Html-Encode $Quest.CompleteSwitch) +
         '<br>'
     )
 
     Add-Html (
-        '<b>Map&#65306;</b>' +
+        '<b>Map：</b>' +
         $Quest.MapID.ToString("000") +
         ' / ' +
         (Html-Encode $Quest.MapName) +
@@ -1440,7 +1711,7 @@ foreach ($Quest in $SortedQuests) {
     )
 
     Add-Html (
-        '<b>Event&#65306;</b>' +
+        '<b>Event：</b>' +
         $Quest.EventID +
         ' / ' +
         (Html-Encode $Quest.EventName) +
@@ -1448,19 +1719,23 @@ foreach ($Quest in $SortedQuests) {
     )
 
     Add-Html (
-        '<b>Page&#65306;</b>' +
+        '<b>Page：</b>' +
         $Quest.Page
     )
 
     Add-Html '</td>'
-
     Add-Html '</tr>'
 }
 
 if ($SortedQuests.Count -eq 0) {
 
     Add-Html (
-        '<tr><td colspan="7">&#27809;&#26377;&#25214;&#21040; QuestSystem_MZ StartQuest &#25351;&#20196;&#12290;</td></tr>'
+
+        '<tr>' +
+        '<td colspan="8">' +
+        '沒有找到 QuestSystem_MZ_Core / QuestSystem_MZ 的 StartQuest 指令。' +
+        '</td>' +
+        '</tr>'
     )
 }
 
@@ -1474,10 +1749,10 @@ Add-Html '</div>'
 
 Add-Html '<div class="box">'
 
-Add-Html '<h2>&#20219;&#21209;&#30456;&#38364;&#25351;&#20196;</h2>'
+Add-Html '<h2>任務相關指令</h2>'
 
 Add-Html (
-    '<p>&#21253;&#21547;&#65306;&#22686;&#21152;&#20219;&#21209;&#36914;&#24230;&#12289;&#22686;&#21152;&#29289;&#21697;&#36914;&#24230;&#12289;&#23436;&#25104;&#20219;&#21209;&#12289;&#36861;&#36452;&#20219;&#21209;&#12289;&#21462;&#28040;&#36861;&#36452;&#12290;</p>'
+    '<p>包含增加任務進度、增加物品進度、完成任務、追蹤任務、取消追蹤等。</p>'
 )
 
 Add-Html '<table>'
@@ -1487,15 +1762,10 @@ Add-Html '<thead>'
 Add-Html '<tr>'
 
 Add-Html '<th>ID</th>'
-
-Add-Html '<th>&#25351;&#20196;</th>'
-
+Add-Html '<th>指令</th>'
 Add-Html '<th>Map</th>'
-
 Add-Html '<th>Event</th>'
-
 Add-Html '<th>Page</th>'
-
 Add-Html '<th>Amount</th>'
 
 Add-Html '</tr>'
@@ -1506,7 +1776,8 @@ Add-Html '<tbody>'
 
 foreach ($Related in $SortedRelated) {
 
-    $DisplayId = $Related.ID
+    $DisplayId =
+        $Related.ID
 
     if (
         [string]::IsNullOrWhiteSpace(
@@ -1514,59 +1785,56 @@ foreach ($Related in $SortedRelated) {
         )
     ) {
 
-        $DisplayId = "NOT_FOUND"
+        $DisplayId =
+            "NOT_FOUND"
     }
 
-    $CommandChinese = $Related.Command
+    $CommandChinese =
+        $Related.Command
 
-    if (
-        $Related.Command.Equals(
-            "AddQuestProgress",
-            [StringComparison]::OrdinalIgnoreCase
-        )
-    ) {
-        $CommandChinese =
-            "&#22686;&#21152;&#20219;&#21209;&#36914;&#24230;"
-    }
+    switch -Regex ($Related.Command) {
 
-    elseif (
-        $Related.Command.Equals(
-            "AddItemProgress",
-            [StringComparison]::OrdinalIgnoreCase
-        )
-    ) {
-        $CommandChinese =
-            "&#22686;&#21152;&#29289;&#21697;&#36914;&#24230;"
-    }
+        '^AddQuestProgress$' {
+            $CommandChinese =
+                "增加任務進度"
+            break
+        }
 
-    elseif (
-        $Related.Command.Equals(
-            "CompleteQuest",
-            [StringComparison]::OrdinalIgnoreCase
-        )
-    ) {
-        $CommandChinese =
-            "&#23436;&#25104;&#20219;&#21209;"
-    }
+        '^AddItemProgress$' {
+            $CommandChinese =
+                "增加物品進度"
+            break
+        }
 
-    elseif (
-        $Related.Command.Equals(
-            "TrackQuest",
-            [StringComparison]::OrdinalIgnoreCase
-        )
-    ) {
-        $CommandChinese =
-            "&#36861;&#36452;&#20219;&#21209;"
-    }
+        '^CompleteQuest$' {
+            $CommandChinese =
+                "完成任務"
+            break
+        }
 
-    elseif (
-        $Related.Command.Equals(
-            "UntrackQuest",
-            [StringComparison]::OrdinalIgnoreCase
-        )
-    ) {
-        $CommandChinese =
-            "&#21462;&#28040;&#36861;&#36452;"
+        '^TrackQuest$' {
+            $CommandChinese =
+                "追蹤任務"
+            break
+        }
+
+        '^UntrackQuest$' {
+            $CommandChinese =
+                "取消追蹤"
+            break
+        }
+
+        '^HideTracker$' {
+            $CommandChinese =
+                "隱藏任務追蹤"
+            break
+        }
+
+        '^ShowTracker$' {
+            $CommandChinese =
+                "顯示任務追蹤"
+            break
+        }
     }
 
     Add-Html '<tr>'
@@ -1579,11 +1847,12 @@ foreach ($Related in $SortedRelated) {
 
     Add-Html (
         '<td><span class="cmd">' +
-        $CommandChinese +
+        (Html-Encode $CommandChinese) +
         '</span></td>'
     )
 
     Add-Html (
+
         '<td>' +
         'Map ' +
         $Related.MapID.ToString("000") +
@@ -1594,6 +1863,7 @@ foreach ($Related in $SortedRelated) {
     )
 
     Add-Html (
+
         '<td>' +
         'Event ' +
         $Related.EventID +
@@ -1621,7 +1891,12 @@ foreach ($Related in $SortedRelated) {
 if ($SortedRelated.Count -eq 0) {
 
     Add-Html (
-        '<tr><td colspan="6">&#27809;&#26377;&#25214;&#21040;&#20219;&#21209;&#30456;&#38364;&#25351;&#20196;&#12290;</td></tr>'
+
+        '<tr>' +
+        '<td colspan="6">' +
+        '沒有找到任務相關指令。' +
+        '</td>' +
+        '</tr>'
     )
 }
 
@@ -1635,30 +1910,22 @@ Add-Html '</div>'
 
 Add-Html '<div class="box">'
 
-Add-Html '<h2>&#25475;&#25551;&#26041;&#24335;</h2>'
+Add-Html '<h2>掃描方式</h2>'
 
 Add-Html (
-    '<p>&#20351;&#29992; RPG Maker MZ Map JSON &#32080;&#27083;&#36958;&#36852;&#25475;&#25551;&#12290;</p>'
+    '<p>掃描 RPG Maker MZ 的 data/MapXXX.json。</p>'
 )
 
 Add-Html (
-    '<p>&#25475;&#25551;&#31684;&#22285;&#65306;data/MapXXX.json</p>'
+    '<p>Plugin：QuestSystem_MZ_Core / QuestSystem_MZ</p>'
 )
 
 Add-Html (
-    '<p>&#25475;&#25551;&#25554;&#20214;&#65306;QuestSystem_MZ</p>'
+    '<p>主要指令：StartQuest</p>'
 )
 
 Add-Html (
-    '<p>&#20027;&#35201;&#25351;&#20196;&#65306;StartQuest</p>'
-)
-
-Add-Html (
-    '<p>ID &#25475;&#25551;&#38918;&#24207;&#65306;001 &#8594; 002 &#8594; 003 &#8594; ...</p>'
-)
-
-Add-Html (
-    '<p>&#19981;&#39023;&#31034; X / Y &#22352;&#27161;&#12290;</p>'
+    '<p>相關指令：CompleteQuest、AddQuestProgress、TrackQuest、UntrackQuest</p>'
 )
 
 Add-Html '</div>'
@@ -1688,18 +1955,27 @@ $HtmlText =
 # ============================================================
 
 Write-Host ""
-Write-Host "HTML created:" -ForegroundColor Green
-Write-Host $HtmlPath
-
-Write-Host ""
 Write-Host "=============================================="
 Write-Host " ALL REPORTS CREATED"
 Write-Host "=============================================="
-Write-Host ""
 
-Write-Host "Quest count : " $SortedQuests.Count
-Write-Host "Duplicate   : " $DuplicateGroups.Count
-Write-Host "Unused      : " $UnusedIds.Count
+Write-Host ""
+Write-Host "任務數量：" $SortedQuests.Count
+Write-Host "重複 ID：" $DuplicateGroups.Count
+Write-Host "未使用 ID：" $UnusedIds.Count
+
+Write-Host ""
+Write-Host "HTML：" -ForegroundColor Green
+Write-Host $HtmlPath
+
+Write-Host ""
+Write-Host "CSV：" -ForegroundColor Green
+Write-Host $CsvPath
+
+Write-Host ""
+Write-Host "TXT：" -ForegroundColor Green
+Write-Host $TxtPath
+
 Write-Host ""
 
 # ============================================================
@@ -1715,9 +1991,10 @@ try {
 catch {
 
     Write-Host ""
-    Write-Host "HTML could not be opened automatically." `
+    Write-Host "無法自動開啟 HTML。" `
         -ForegroundColor Yellow
 }
 
 Write-Host ""
+
 Read-Host "Press Enter to exit"
