@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>&#20219;&#21209; ID &#25475;&#25551;&#22577;&#21578;</title>
+<title>RPG Maker MZ 任務 ID 掃描報告</title>
 <style>
 body{font-family:"Microsoft JhengHei",Arial,sans-serif;background:#eef2f4;margin:0;padding:20px;color:#222;}
 .box{background:#fff;border-radius:10px;padding:20px;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,.08);overflow:auto;}
@@ -16,131 +16,545 @@ th{background:#405762;color:#fff;padding:10px;text-align:left;}
 td{padding:10px;border-bottom:1px solid #ddd;vertical-align:top;}
 .id{color:#06c;text-decoration:underline;cursor:pointer;font-weight:bold;font-size:17px;}
 .detail{display:none;background:#f7fafb;}
-.cmd{background:#e5f1ff;padding:5px 9px;border-radius:5px;}
 .dup{background:#fff0f0;border:1px solid #d99;padding:12px;border-radius:7px;margin:8px 0;}
 .unused{display:inline-block;background:#fff0b5;padding:5px 9px;border-radius:5px;margin:3px;}
 .ok{color:#168348;font-weight:bold;}
+.rule{background:#edf7ff;border-left:5px solid #4285c5;padding:12px;margin:10px 0;}
 .search{width:100%;padding:11px;box-sizing:border-box;border:1px solid #bbb;border-radius:6px;font-size:16px;}
+.cmd{background:#e5f1ff;padding:4px 8px;border-radius:5px;}
 </style>
 <script>
 function toggleDetail(id){
 var row=document.getElementById(id);
-if(!row){return;}
-if(row.style.display==="table-row"){row.style.display="none";}else{row.style.display="table-row";}
+if(!row)return;
+row.style.display=(row.style.display==="table-row")?"none":"table-row";
 }
 function searchQuest(){
-var box=document.getElementById("searchBox");
-var q=box.value.toLowerCase();
+var q=document.getElementById("searchBox").value.toLowerCase();
 var rows=document.getElementsByClassName("questrow");
 for(var i=0;i<rows.length;i++){
 var text=rows[i].innerText.toLowerCase();
-if(text.indexOf(q)>=0){rows[i].style.display="";}else{rows[i].style.display="none";}
+rows[i].style.display=text.indexOf(q)>=0?"":"none";
 }
 }
 </script>
 </head>
 <body>
 <div class="box">
-<h1>&#82;&#80;&#71; Maker MZ &#20219;&#21209; ID &#25475;&#25551;&#22577;&#21578;</h1>
-<p>QuestSystem_MZ &#20219;&#21209;&#25475;&#25551;&#22120; v19.3 Stable</p>
+<h1>RPG Maker MZ 任務 ID 掃描報告</h1>
+<p>QuestIDScanner_MZ v22.0</p>
+<div class="rule">
+<b>重複判定規則：</b><br>
+同一 Event 不同 Page 的相同 Quest ID 不算重複。<br>
+同一 Event + 同一 Page 出現相同 Quest ID 兩次以上，才算重複。<br>
+不同 Event 使用相同 Quest ID，算真正重複。
+</div>
 <div class="stats">
-<div class="stat">&#20219;&#21209;&#25976;&#37327;&#65306;<b>1</b></div>
-<div class="stat">&#26368;&#22823; ID&#65306;<b>002</b></div>
-<div class="stat">&#37325;&#35079; ID&#65306;<b>0</b></div>
-<div class="stat">&#26410;&#20351;&#29992; ID&#65306;<b>1</b></div>
+<div class="stat">任務數量：<b>13</b></div>
+<div class="stat">最大 ID：<b>009</b></div>
+<div class="stat">真正重複 ID：<b>0</b></div>
+<div class="stat">未使用 ID：<b>0</b></div>
 </div>
 </div>
 <div class="box">
-<h2>&#25628;&#23563;&#20219;&#21209;</h2>
-<input id="searchBox" class="search" onkeyup="searchQuest()" placeholder="&#25628;&#23563; ID&#12289;&#20219;&#21209;&#21517;&#31281;&#12289;Map&#12289;Event...">
+<h2>搜尋任務</h2>
+<input id="searchBox" class="search" onkeyup="searchQuest()" placeholder="搜尋 ID、任務名稱、Map、Event...">
 </div>
 <div class="box">
-<h2>&#26410;&#20351;&#29992;&#20219;&#21209; ID</h2>
-<span class="unused">001</span>
+<h2>未使用任務 ID</h2>
+<div class="ok">沒有未使用 ID。</div>
 </div>
 <div class="box">
-<h2>&#37325;&#35079;&#20219;&#21209; ID</h2>
-<div class="ok">&#27809;&#26377;&#37325;&#35079;&#20219;&#21209; ID&#12290;</div>
+<h2>真正重複任務 ID</h2>
+<div class="ok">沒有真正重複任務 ID。</div>
 </div>
 <div class="box">
-<h2>&#20219;&#21209;&#28165;&#21934;</h2>
-<p>&#40670;&#25802;&#34253;&#33394; ID &#21487;&#23637;&#38283;&#35443;&#32048;&#36039;&#26009;&#12290;</p>
+<h2>任務清單</h2>
+<p>點擊藍色 ID 可以展開任務詳細資料。</p>
 <table>
 <thead>
 <tr>
 <th>ID</th>
-<th>&#20219;&#21209;&#21517;&#31281;</th>
+<th>任務名稱</th>
 <th>Map</th>
 <th>Event</th>
 <th>Page</th>
 <th>Type</th>
+<th>Target</th>
 <th>Amount</th>
 </tr>
 </thead>
 <tbody>
 <tr class="questrow">
-<td><span class="id" onclick="toggleDetail('detail_1')"">002</span></td>
+<td><span class="id" onclick="toggleDetail('detail_1')">001</span></td>
+<td>森林的異變</td>
+<td>Map 010<br><small>維爾島村長家</small></td>
+<td>Event 7<br><small>村長</small></td>
+<td>1</td>
+<td>kill</td>
+<td>1</td>
+<td>5</td>
+</tr>
+<tr id="detail_1" class="detail">
+<td colspan="8">
+<b>任務 ID：</b>001<br>
+<b>任務名稱：</b>森林的異變<br>
+<b>任務描述：</b>村長請米潔雅前往森林，調查哥布林異變事件。<br>
+<b>任務目標：</b>擊殺森林哥布林<br>
+<b>Type：</b>kill<br>
+<b>Target：</b>1<br>
+<b>Amount：</b>5<br>
+<b>Category：</b>main<br>
+<b>開始任務開關：</b>0<br>
+<b>完成任務開關：</b>3<br>
+<b>Map：</b>010 / 維爾島村長家<br>
+<b>Map 檔案：</b>Map010.json<br>
+<b>Event：</b>7 / 村長<br>
+<b>座標：</b>X=11 / Y=10<br>
+<b>事件頁：</b>1<br>
+<b>Plugin Command：</b><span class="cmd">StartQuest</span>
+</td>
+</tr>
+<tr class="questrow">
+<td><span class="id" onclick="toggleDetail('detail_2')">002</span></td>
 <td>追查影蝕碎片</td>
 <td>Map 010<br><small>維爾島村長家</small></td>
 <td>Event 7<br><small>村長</small></td>
 <td>3</td>
 <td>count</td>
 <td>1</td>
+<td>1</td>
 </tr>
-<tr id="detail_1" class="detail">
-<td colspan="7">
-<b>&#20219;&#21209; ID&#65306;</b>002<br>
-<b>&#20219;&#21209;&#21517;&#31281;&#65306;</b>追查影蝕碎片<br>
-<b>&#20219;&#21209;&#25551;&#36848;&#65306;</b>前往其他城鎮打探影蝕碎片的來源。<br>
-<b>&#20219;&#21209;&#30446;&#27161;&#65306;</b>前往其他城鎮打探消息<br>
-<b>Type&#65306;</b>count<br>
-<b>Target&#65306;</b>1<br>
-<b>Amount&#65306;</b>1<br>
-<b>Category&#65306;</b>main<br>
-<b>Start Switch&#65306;</b><br>
-<b>Complete Switch&#65306;</b><br>
-<b>Map&#65306;</b>010 / 維爾島村長家<br>
-<b>Event&#65306;</b>7 / 村長<br>
-<b>Page&#65306;</b>3
+<tr id="detail_2" class="detail">
+<td colspan="8">
+<b>任務 ID：</b>002<br>
+<b>任務名稱：</b>追查影蝕碎片<br>
+<b>任務描述：</b>前往其他城鎮打探影蝕碎片的來源。<br>
+<b>任務目標：</b>前往其他城鎮打探消息<br>
+<b>Type：</b>count<br>
+<b>Target：</b>1<br>
+<b>Amount：</b>1<br>
+<b>Category：</b>main<br>
+<b>開始任務開關：</b><br>
+<b>完成任務開關：</b><br>
+<b>Map：</b>010 / 維爾島村長家<br>
+<b>Map 檔案：</b>Map010.json<br>
+<b>Event：</b>7 / 村長<br>
+<b>座標：</b>X=11 / Y=10<br>
+<b>事件頁：</b>3<br>
+<b>Plugin Command：</b><span class="cmd">StartQuest</span>
+</td>
+</tr>
+<tr class="questrow">
+<td><span class="id" onclick="toggleDetail('detail_3')">003</span></td>
+<td>蒐集影蝕碎片情報</td>
+<td>Map 015<br><small>晨曦城主家</small></td>
+<td>Event 6<br><small>艾德蒙</small></td>
+<td>1</td>
+<td>count</td>
+<td>6</td>
+<td>2</td>
+</tr>
+<tr id="detail_3" class="detail">
+<td colspan="8">
+<b>任務 ID：</b>003<br>
+<b>任務名稱：</b>蒐集影蝕碎片情報<br>
+<b>任務描述：</b>調查晨曦城內影蝕碎片相關的情報。<br>
+<b>任務目標：</b>蒐集影蝕碎片情報<br>
+<b>Type：</b>count<br>
+<b>Target：</b>6<br>
+<b>Amount：</b>2<br>
+<b>Category：</b>main<br>
+<b>開始任務開關：</b>12<br>
+<b>完成任務開關：</b>15<br>
+<b>Map：</b>015 / 晨曦城主家<br>
+<b>Map 檔案：</b>Map015.json<br>
+<b>Event：</b>6 / 艾德蒙<br>
+<b>座標：</b>X=9 / Y=6<br>
+<b>事件頁：</b>1<br>
+<b>Plugin Command：</b><span class="cmd">StartQuest</span>
+</td>
+</tr>
+<tr class="questrow">
+<td><span class="id" onclick="toggleDetail('detail_4')">004</span></td>
+<td>艾娜的蘑菇孢子</td>
+<td>Map 012<br><small>艾娜家</small></td>
+<td>Event 3<br><small>艾娜</small></td>
+<td>3</td>
+<td>item</td>
+<td>92</td>
+<td>5</td>
+</tr>
+<tr id="detail_4" class="detail">
+<td colspan="8">
+<b>任務 ID：</b>004<br>
+<b>任務名稱：</b>艾娜的蘑菇孢子<br>
+<b>任務描述：</b>艾娜需要蘑菇孢子製作藥水，請幫她收集蘑菇孢子。<br>
+<b>任務目標：</b>取得蘑菇孢子<br>
+<b>Type：</b>item<br>
+<b>Target：</b>92<br>
+<b>Amount：</b>5<br>
+<b>Category：</b>side<br>
+<b>開始任務開關：</b>18<br>
+<b>完成任務開關：</b>19<br>
+<b>Map：</b>012 / 艾娜家<br>
+<b>Map 檔案：</b>Map012.json<br>
+<b>Event：</b>3 / 艾娜<br>
+<b>座標：</b>X=7 / Y=7<br>
+<b>事件頁：</b>3<br>
+<b>Plugin Command：</b><span class="cmd">StartQuest</span>
+</td>
+</tr>
+<tr class="questrow">
+<td><span class="id" onclick="toggleDetail('detail_5')">005</span></td>
+<td>雷恩發布尋人任務</td>
+<td>Map 003<br><small>維爾漁村</small></td>
+<td>Event 13<br><small>雷恩伐木工</small></td>
+<td>2</td>
+<td>count</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr id="detail_5" class="detail">
+<td colspan="8">
+<b>任務 ID：</b>005<br>
+<b>任務名稱：</b>雷恩發布尋人任務<br>
+<b>任務描述：</b>到森林找伐木工傑克<br>
+<b>任務目標：</b>找到傑克<br>
+<b>Type：</b>count<br>
+<b>Target：</b>1<br>
+<b>Amount：</b>1<br>
+<b>Category：</b>side<br>
+<b>開始任務開關：</b>6<br>
+<b>完成任務開關：</b>7<br>
+<b>Map：</b>003 / 維爾漁村<br>
+<b>Map 檔案：</b>Map003.json<br>
+<b>Event：</b>13 / 雷恩伐木工<br>
+<b>座標：</b>X=7 / Y=8<br>
+<b>事件頁：</b>2<br>
+<b>Plugin Command：</b><span class="cmd">StartQuest</span>
+</td>
+</tr>
+<tr class="questrow">
+<td><span class="id" onclick="toggleDetail('detail_6')">006</span></td>
+<td>冒險者登錄試煉</td>
+<td>Map 019<br><small>冒險者公會-職員室</small></td>
+<td>Event 5<br><small>羅恩任務管理員</small></td>
+<td>1</td>
+<td>item</td>
+<td>202</td>
+<td>1</td>
+</tr>
+<tr id="detail_6" class="detail">
+<td colspan="8">
+<b>任務 ID：</b>006<br>
+<b>任務名稱：</b>冒險者登錄試煉<br>
+<b>任務描述：</b>完成公會指定的試煉，
+取得未鑑定物品並完成鑑定。<br>
+<b>任務目標：</b>取得鑑定後的物品<br>
+<b>Type：</b>item<br>
+<b>Target：</b>202<br>
+<b>Amount：</b>1<br>
+<b>Category：</b>side<br>
+<b>開始任務開關：</b>32<br>
+<b>完成任務開關：</b>33<br>
+<b>Map：</b>019 / 冒險者公會-職員室<br>
+<b>Map 檔案：</b>Map019.json<br>
+<b>Event：</b>5 / 羅恩任務管理員<br>
+<b>座標：</b>X=9 / Y=4<br>
+<b>事件頁：</b>1<br>
+<b>Plugin Command：</b><span class="cmd">StartQuest</span>
+</td>
+</tr>
+<tr class="questrow">
+<td><span class="id" onclick="toggleDetail('detail_7')">006</span></td>
+<td>冒險者登錄試煉</td>
+<td>Map 019<br><small>冒險者公會-職員室</small></td>
+<td>Event 5<br><small>羅恩任務管理員</small></td>
+<td>3</td>
+<td>item</td>
+<td>202</td>
+<td>1</td>
+</tr>
+<tr id="detail_7" class="detail">
+<td colspan="8">
+<b>任務 ID：</b>006<br>
+<b>任務名稱：</b>冒險者登錄試煉<br>
+<b>任務描述：</b>完成公會指定的試煉，
+取得未鑑定物品並完成鑑定。<br>
+<b>任務目標：</b>取得鑑定後的物品<br>
+<b>Type：</b>item<br>
+<b>Target：</b>202<br>
+<b>Amount：</b>1<br>
+<b>Category：</b>side<br>
+<b>開始任務開關：</b>32<br>
+<b>完成任務開關：</b>33<br>
+<b>Map：</b>019 / 冒險者公會-職員室<br>
+<b>Map 檔案：</b>Map019.json<br>
+<b>Event：</b>5 / 羅恩任務管理員<br>
+<b>座標：</b>X=9 / Y=4<br>
+<b>事件頁：</b>3<br>
+<b>Plugin Command：</b><span class="cmd">StartQuest</span>
+</td>
+</tr>
+<tr class="questrow">
+<td><span class="id" onclick="toggleDetail('detail_8')">007</span></td>
+<td>晨曦冒險者公會哥布林討伐委託</td>
+<td>Map 019<br><small>冒險者公會-職員室</small></td>
+<td>Event 5<br><small>羅恩任務管理員</small></td>
+<td>2</td>
+<td>kill</td>
+<td>1</td>
+<td>5</td>
+</tr>
+<tr id="detail_8" class="detail">
+<td colspan="8">
+<b>任務 ID：</b>007<br>
+<b>任務名稱：</b>晨曦冒險者公會哥布林討伐委託<br>
+<b>任務描述：</b>討伐晨曦城附近森林中的哥布林。<br>
+<b>任務目標：</b>討伐哥布林<br>
+<b>Type：</b>kill<br>
+<b>Target：</b>1<br>
+<b>Amount：</b>5<br>
+<b>Category：</b>side<br>
+<b>開始任務開關：</b>23<br>
+<b>完成任務開關：</b>24<br>
+<b>Map：</b>019 / 冒險者公會-職員室<br>
+<b>Map 檔案：</b>Map019.json<br>
+<b>Event：</b>5 / 羅恩任務管理員<br>
+<b>座標：</b>X=9 / Y=4<br>
+<b>事件頁：</b>2<br>
+<b>Plugin Command：</b><span class="cmd">StartQuest</span>
+</td>
+</tr>
+<tr class="questrow">
+<td><span class="id" onclick="toggleDetail('detail_9')">007</span></td>
+<td>晨曦冒險者公會哥布林討伐委託</td>
+<td>Map 019<br><small>冒險者公會-職員室</small></td>
+<td>Event 5<br><small>羅恩任務管理員</small></td>
+<td>3</td>
+<td>kill</td>
+<td>1</td>
+<td>5</td>
+</tr>
+<tr id="detail_9" class="detail">
+<td colspan="8">
+<b>任務 ID：</b>007<br>
+<b>任務名稱：</b>晨曦冒險者公會哥布林討伐委託<br>
+<b>任務描述：</b>討伐晨曦城附近森林中的哥布林。<br>
+<b>任務目標：</b>討伐哥布林<br>
+<b>Type：</b>kill<br>
+<b>Target：</b>1<br>
+<b>Amount：</b>5<br>
+<b>Category：</b>side<br>
+<b>開始任務開關：</b>23<br>
+<b>完成任務開關：</b>24<br>
+<b>Map：</b>019 / 冒險者公會-職員室<br>
+<b>Map 檔案：</b>Map019.json<br>
+<b>Event：</b>5 / 羅恩任務管理員<br>
+<b>座標：</b>X=9 / Y=4<br>
+<b>事件頁：</b>3<br>
+<b>Plugin Command：</b><span class="cmd">StartQuest</span>
+</td>
+</tr>
+<tr class="questrow">
+<td><span class="id" onclick="toggleDetail('detail_10')">008</span></td>
+<td>晨曦冒險公會森林採集委託</td>
+<td>Map 019<br><small>冒險者公會-職員室</small></td>
+<td>Event 5<br><small>羅恩任務管理員</small></td>
+<td>2</td>
+<td>item</td>
+<td>51</td>
+<td>5</td>
+</tr>
+<tr id="detail_10" class="detail">
+<td colspan="8">
+<b>任務 ID：</b>008<br>
+<b>任務名稱：</b>晨曦冒險公會森林採集委託<br>
+<b>任務描述：</b>前往晨曦城附近森林採集<br>
+<b>任務目標：</b>收集物品<br>
+<b>Type：</b>item<br>
+<b>Target：</b>51<br>
+<b>Amount：</b>5<br>
+<b>Category：</b>side<br>
+<b>開始任務開關：</b>25<br>
+<b>完成任務開關：</b>26<br>
+<b>Map：</b>019 / 冒險者公會-職員室<br>
+<b>Map 檔案：</b>Map019.json<br>
+<b>Event：</b>5 / 羅恩任務管理員<br>
+<b>座標：</b>X=9 / Y=4<br>
+<b>事件頁：</b>2<br>
+<b>Plugin Command：</b><span class="cmd">StartQuest</span>
+</td>
+</tr>
+<tr class="questrow">
+<td><span class="id" onclick="toggleDetail('detail_11')">008</span></td>
+<td>晨曦冒險公會森林採集委託</td>
+<td>Map 019<br><small>冒險者公會-職員室</small></td>
+<td>Event 5<br><small>羅恩任務管理員</small></td>
+<td>3</td>
+<td>item</td>
+<td>51</td>
+<td>5</td>
+</tr>
+<tr id="detail_11" class="detail">
+<td colspan="8">
+<b>任務 ID：</b>008<br>
+<b>任務名稱：</b>晨曦冒險公會森林採集委託<br>
+<b>任務描述：</b>前往晨曦城附近森林採集<br>
+<b>任務目標：</b>收集物品<br>
+<b>Type：</b>item<br>
+<b>Target：</b>51<br>
+<b>Amount：</b>5<br>
+<b>Category：</b>side<br>
+<b>開始任務開關：</b>25<br>
+<b>完成任務開關：</b>26<br>
+<b>Map：</b>019 / 冒險者公會-職員室<br>
+<b>Map 檔案：</b>Map019.json<br>
+<b>Event：</b>5 / 羅恩任務管理員<br>
+<b>座標：</b>X=9 / Y=4<br>
+<b>事件頁：</b>3<br>
+<b>Plugin Command：</b><span class="cmd">StartQuest</span>
+</td>
+</tr>
+<tr class="questrow">
+<td><span class="id" onclick="toggleDetail('detail_12')">009</span></td>
+<td>晨曦冒險者公會尋找失物委託</td>
+<td>Map 019<br><small>冒險者公會-職員室</small></td>
+<td>Event 5<br><small>羅恩任務管理員</small></td>
+<td>2</td>
+<td>count</td>
+<td>97</td>
+<td>1</td>
+</tr>
+<tr id="detail_12" class="detail">
+<td colspan="8">
+<b>任務 ID：</b>009<br>
+<b>任務名稱：</b>晨曦冒險者公會尋找失物委託<br>
+<b>任務描述：</b>尋找在晨曦城附近遺失的古老銀製懷錶<br>
+<b>任務目標：</b>找回古老的銀製懷錶<br>
+<b>Type：</b>count<br>
+<b>Target：</b>97<br>
+<b>Amount：</b>1<br>
+<b>Category：</b>side<br>
+<b>開始任務開關：</b>27<br>
+<b>完成任務開關：</b>28<br>
+<b>Map：</b>019 / 冒險者公會-職員室<br>
+<b>Map 檔案：</b>Map019.json<br>
+<b>Event：</b>5 / 羅恩任務管理員<br>
+<b>座標：</b>X=9 / Y=4<br>
+<b>事件頁：</b>2<br>
+<b>Plugin Command：</b><span class="cmd">StartQuest</span>
+</td>
+</tr>
+<tr class="questrow">
+<td><span class="id" onclick="toggleDetail('detail_13')">009</span></td>
+<td>晨曦冒險者公會尋找失物委託</td>
+<td>Map 019<br><small>冒險者公會-職員室</small></td>
+<td>Event 5<br><small>羅恩任務管理員</small></td>
+<td>3</td>
+<td>count</td>
+<td>97</td>
+<td>1</td>
+</tr>
+<tr id="detail_13" class="detail">
+<td colspan="8">
+<b>任務 ID：</b>009<br>
+<b>任務名稱：</b>晨曦冒險者公會尋找失物委託<br>
+<b>任務描述：</b>尋找在晨曦城附近遺失的古老銀製懷錶<br>
+<b>任務目標：</b>找回古老的銀製懷錶<br>
+<b>Type：</b>count<br>
+<b>Target：</b>97<br>
+<b>Amount：</b>1<br>
+<b>Category：</b>side<br>
+<b>開始任務開關：</b>27<br>
+<b>完成任務開關：</b>28<br>
+<b>Map：</b>019 / 冒險者公會-職員室<br>
+<b>Map 檔案：</b>Map019.json<br>
+<b>Event：</b>5 / 羅恩任務管理員<br>
+<b>座標：</b>X=9 / Y=4<br>
+<b>事件頁：</b>3<br>
+<b>Plugin Command：</b><span class="cmd">StartQuest</span>
 </td>
 </tr>
 </tbody>
 </table>
 </div>
 <div class="box">
-<h2>&#20219;&#21209;&#30456;&#38364;&#25351;&#20196;</h2>
-<p>&#21253;&#21547;&#65306;&#22686;&#21152;&#20219;&#21209;&#36914;&#24230;&#12289;&#22686;&#21152;&#29289;&#21697;&#36914;&#24230;&#12289;&#23436;&#25104;&#20219;&#21209;&#12289;&#36861;&#36452;&#20219;&#21209;&#12289;&#21462;&#28040;&#36861;&#36452;&#12290;</p>
+<h2>任務相關指令</h2>
 <table>
 <thead>
 <tr>
 <th>ID</th>
-<th>&#25351;&#20196;</th>
+<th>指令</th>
+<th>Amount</th>
 <th>Map</th>
 <th>Event</th>
 <th>Page</th>
-<th>Amount</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><b>003</b></td>
-<td><span class="cmd">&#22686;&#21152;&#20219;&#21209;&#36914;&#24230;</span></td>
-<td>Map 024<br><small>晨曦港口</small></td>
-<td>Event 7<br><small>晨曦城下船</small></td>
+<td>002</td>
+<td>CompleteQuest</td>
+<td></td>
+<td>Map 024<br>晨曦港口</td>
+<td>Event 16<br>EV016</td>
 <td>1</td>
+</tr>
+<tr>
+<td>003</td>
+<td>AddQuestProgress</td>
+<td>1
+
+============================================================================</td>
+<td>Map 016<br>晨曦城酒館</td>
+<td>Event 5<br>葛雷戈酒館老闆</td>
+<td>1</td>
+</tr>
+<tr>
+<td>003</td>
+<td>AddQuestProgress</td>
+<td>1
+
+============================================================================</td>
+<td>Map 016<br>晨曦城酒館</td>
+<td>Event 5<br>葛雷戈酒館老闆</td>
+<td>2</td>
+</tr>
+<tr>
+<td>003</td>
+<td>AddQuestProgress</td>
+<td>1
+
+============================================================================</td>
+<td>Map 020<br>道具商店</td>
+<td>Event 3<br>道具店-塞拉</td>
+<td>1</td>
+</tr>
+<tr>
+<td>003</td>
+<td>AddQuestProgress</td>
+<td>1</td>
+<td>Map 024<br>晨曦港口</td>
+<td>Event 7<br>晨曦城下船</td>
+<td>1</td>
+</tr>
+<tr>
+<td>005</td>
+<td>CompleteQuest</td>
+<td></td>
+<td>Map 006<br>維爾森林2</td>
+<td>Event 12<br>傑克</td>
 <td>1</td>
 </tr>
 </tbody>
 </table>
 </div>
 <div class="box">
-<h2>&#25475;&#25551;&#26041;&#24335;</h2>
-<p>&#20351;&#29992; RPG Maker MZ Map JSON &#32080;&#27083;&#36958;&#36852;&#25475;&#25551;&#12290;</p>
-<p>&#25475;&#25551;&#31684;&#22285;&#65306;data/MapXXX.json</p>
-<p>&#25475;&#25551;&#25554;&#20214;&#65306;QuestSystem_MZ</p>
-<p>&#20027;&#35201;&#25351;&#20196;&#65306;StartQuest</p>
-<p>ID &#25475;&#25551;&#38918;&#24207;&#65306;001 &#8594; 002 &#8594; 003 &#8594; ...</p>
-<p>&#19981;&#39023;&#31034; X / Y &#22352;&#27161;&#12290;</p>
+<b>掃描完成。</b><br>
+本報告由 QuestIDScanner_MZ v22.0 建立。<br>
+同一 Event 不同 Page 的相同 Quest ID 不視為重複。
 </div>
 </body>
 </html>

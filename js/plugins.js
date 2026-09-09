@@ -11,5 +11,7 @@ var $plugins =
 {"name":"GetItemSound_MZ","status":true,"description":"獲得／扣除物品自動音效：普通／武器／防具／稀有／任務，共10種","parameters":{"Normal Get SE":"Item3","Normal Lose SE":"Cancel2","Weapon Get SE":"Equip1","Weapon Lose SE":"Cancel2","Armor Get SE":"Equip2","Armor Lose SE":"Cancel2","Rare Get SE":"Item1","Rare Lose SE":"Cancel2","Quest Get SE":"Decision2","Quest Lose SE":"Cancel2","Volume":"90","Pitch":"100","Pan":"0"}},
 {"name":"QuestSystem_MZ_Core","status":true,"description":"v1.4.1 任務系統核心：任務資料、開始、進度、完成、追蹤、開關","parameters":{"Max Track":"1","Complete SE":"Applause1\r\n\r\n============================================================================"}},
 {"name":"QuestSystem_MZ_Progress","status":true,"description":"v1.4.1 任務進度：所有取得物品自動同步、戰鬥擊殺自動同步","parameters":{}},
-{"name":"QuestSystem_MZ_UI","status":true,"description":"v1.4.1 任務系統 UI：任務列表、詳細資料、任務追蹤、提示視窗","parameters":{}}
+{"name":"QuestSystem_MZ_UI","status":true,"description":"v1.4.1 任務系統 UI：任務列表、詳細資料、任務追蹤、提示視窗","parameters":{}},
+{"name":"IdentificationSystem_MZ","status":true,"description":"v1.0.0 鑑定系統：Lv.1～Lv.3 未鑑定物品轉換為真正物品","parameters":{}},
+{"name":"RandomUnidentifiedDrop_MZ","status":true,"description":"v1.0.0 隨機未鑑定物品掉落系統","parameters":{}}
 ];
