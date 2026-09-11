@@ -9,9 +9,10 @@ var $plugins =
 {"name":"UI_MapQuestLayout_Fix","status":false,"description":"v1.0 修正任務追蹤與小地圖位置重疊、遊戲視窗縮放後位置沒有更新","parameters":{}},
 {"name":"VirtualJoystick_MZ","status":true,"description":"v1.0.0 手機虛擬搖桿：支援觸控移動、鍵盤操作與自動適應畫面","parameters":{"Enabled":"true","Joystick Size":"140","Knob Size":"58","Left Margin":"25","Bottom Margin":"30","Opacity":"150","Dead Zone":"15","Direction Threshold":"25","Move Interval":"5","Show On Desktop":"true","Hide During Events":"true","Hide During Menu":"true","Background Color":"rgba(80,80,80,0.65)","Knob Color":"rgba(220,220,220,0.85)"}},
 {"name":"GetItemSound_MZ","status":true,"description":"獲得／扣除物品自動音效：普通／武器／防具／稀有／任務，共10種","parameters":{"Normal Get SE":"Item3","Normal Lose SE":"Cancel2","Weapon Get SE":"Equip1","Weapon Lose SE":"Cancel2","Armor Get SE":"Equip2","Armor Lose SE":"Cancel2","Rare Get SE":"Item1","Rare Lose SE":"Cancel2","Quest Get SE":"Decision2","Quest Lose SE":"Cancel2","Volume":"90","Pitch":"100","Pan":"0"}},
-{"name":"QuestSystem_MZ_Core","status":true,"description":"v1.4.1 任務系統核心：任務資料、開始、進度、完成、追蹤、開關","parameters":{"Max Track":"1","Window Width":"760","Window Height":"520","Tracker Width":"360","Tracker Height":"205","Tracker Font Size":"18","Tracker X":"15","Tracker Y":"15","Show Tracker":"true","Complete SE":"Applause1"}},
-{"name":"QuestSystem_MZ_Progress","status":true,"description":"v1.4.1 任務進度：所有取得物品自動同步、戰鬥擊殺自動同步","parameters":{}},
-{"name":"QuestSystem_MZ_UI","status":true,"description":"v1.4.1 任務系統 UI：任務列表、詳細資料、任務追蹤、提示視窗","parameters":{}},
 {"name":"IdentificationSystem_MZ","status":true,"description":"v1.0.0 鑑定系統：Lv.1～Lv.3 未鑑定物品轉換為真正物品","parameters":{}},
-{"name":"RandomUnidentifiedDrop_MZ","status":true,"description":"v1.0.0 隨機未鑑定物品掉落系統","parameters":{}}
+{"name":"RandomUnidentifiedDrop_MZ","status":true,"description":"v1.0.0 隨機未鑑定物品掉落系統","parameters":{}},
+{"name":"QuestSystem_MZ_Core","status":true,"description":"v1.5.1 任務系統核心：任務資料、開始、進度、完成、追蹤、開關","parameters":{"Max Track":"1","Window Width":"760","Window Height":"520","Tracker Width":"360","Tracker Height":"205","Tracker Font Size":"18","Tracker X":"15","Tracker Y":"15","Show Tracker":"true","Complete SE":"Applause1"}},
+{"name":"QuestSystem_MZ_Report","status":true,"description":"QuestSystem MZ Core Report v1.5.1 - 任務回報系統","parameters":{}},
+{"name":"QuestSystem_MZ_Progress","status":true,"description":"v1.5.1 任務進度：所有取得物品自動同步、戰鬥擊殺自動同步","parameters":{}},
+{"name":"QuestSystem_MZ_UI","status":true,"description":"v1.5.1 任務系統 UI：自動顯示追蹤任務、任務列表、詳細資料、提示視窗","parameters":{}}
 ];
